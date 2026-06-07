@@ -19,7 +19,6 @@ use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
 use Filament\Forms\Components\Select;
-use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Notifications\Notification;
 use Filament\Pages\Concerns\InteractsWithHeaderActions;
 use Filament\Schemas\Components\Grid;
@@ -30,6 +29,8 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\TextSize;
 use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Concerns\InteractsWithTable;
+use Filament\Tables\Contracts\HasTable;
 use UnitEnum;
 use Filament\Pages\Page;
 use Filament\Facades\Filament;
@@ -38,9 +39,9 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Concerns\InteractsWithInfolists;
 use Filament\Infolists\Contracts\HasInfolists;
+use Filament\Infolists\Infolist;
 use Filament\Infolists\Components\TextEntry;
-use Filament\Tables\Concerns\InteractsWithTable;
-use Filament\Tables\Contracts\HasTable;
+use Filament\Infolists\Components\RepeatableEntry;
 use Illuminate\Support\Facades\DB;
 
 class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, HasActions
@@ -156,12 +157,11 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
 
                                 Section::make('Rincian Beban Operasional')
                                     ->schema([
-                                        // PENGGUNAAN REPEATABLE ENTRY MENGATASI BUG TAMPILAN
                                         RepeatableEntry::make('rincian_beban')
                                             ->label('')
                                             ->schema([
                                                 TextEntry::make('name')->label('Kategori Beban')->weight('bold'),
-                                                TextEntry::make('amount')->label('Nominal Beban')->money('IDR')->color('danger'),
+                                                TextEntry::make('amount')->label('Nominal Beban')->money('IDR')->color('danger')->weight('bold'),
                                             ])->columns(2)
                                     ]),
 
@@ -190,7 +190,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                             ->label('')
                                             ->schema([
                                                 TextEntry::make('name')->label('Sumber Pemasukan')->weight('bold'),
-                                                TextEntry::make('amount')->label('Nominal')->money('IDR')->color('success'),
+                                                TextEntry::make('amount')->label('Nominal')->money('IDR')->color('success')->weight('bold'),
                                             ])->columns(2)
                                     ]),
                                     
@@ -201,7 +201,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                             ->label('')
                                             ->schema([
                                                 TextEntry::make('name')->label('Tujuan Pengeluaran')->weight('bold'),
-                                                TextEntry::make('amount')->label('Nominal')->money('IDR')->color('danger'),
+                                                TextEntry::make('amount')->label('Nominal')->money('IDR')->color('danger')->weight('bold'),
                                             ])->columns(2)
                                     ]),
                                     
@@ -238,8 +238,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                         TextEntry::make('order_number')->label('No. Nota')->weight('bold'),
                                         TextEntry::make('customer')->label('Pelanggan'),
                                         TextEntry::make('remaining_balance')->label('Sisa Tagihan')->money('IDR')->color('danger')->weight('bold'),
-                                    ])
-                                    ->columns(4) 
+                                    ])->columns(4) 
                             ]),
 
                         // ==========================================
@@ -262,8 +261,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                         TextEntry::make('invoice_number')->label('No. Invoice')->weight('bold'),
                                         TextEntry::make('supplier')->label('Supplier'),
                                         TextEntry::make('remaining_balance')->label('Sisa Hutang')->money('IDR')->color('danger')->weight('bold'),
-                                    ])
-                                    ->columns(4)
+                                    ])->columns(4)
                             ]),
 
                         // ==========================================
@@ -303,7 +301,6 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                             ->schema([
                                 Grid::make(3)->schema([
                                     Section::make('Margin Laba Bersih')
-                                        ->description('Rasio laba terhadap total omzet.')
                                         ->schema([
                                             TextEntry::make('profit_margin')
                                                 ->label('Persentase')
@@ -320,8 +317,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                                 }),
                                         ])->columnSpan(1),
 
-                                    Section::make('Rasio Likuiditas (Current Ratio)')
-                                        ->description('Kemampuan aset melunasi kewajiban.')
+                                    Section::make('Rasio Likuiditas')
                                         ->schema([
                                             TextEntry::make('current_ratio')
                                                 ->label('Skor Rasio')
@@ -338,8 +334,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                                 }),
                                         ])->columnSpan(1),
 
-                                    Section::make('Rasio Hutang (Debt to Asset)')
-                                        ->description('Persentase hutang dibanding harta.')
+                                    Section::make('Rasio Hutang')
                                         ->schema([
                                             TextEntry::make('debt_ratio')
                                                 ->label('Persentase')
@@ -382,26 +377,36 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
 
         // --- A. LABA RUGI ---
         $omzetBarang = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('created_at', [$startDate, $endDate])->sum(DB::raw('total_amount - shipping_fee_billed'));
-        
-        // 1. Pendapatan Ongkir (Yang ditagih ke konsumen)
         $omzetOngkir = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('created_at', [$startDate, $endDate])->sum('shipping_fee_billed');
-        
-        // 2. Beban Ongkir Riil (Yang dibayar ke ekspedisi/kurir)
         $bebanOngkir = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('created_at', [$startDate, $endDate])->sum('shipping_cost_actual');
 
         $hpp = OrderItem::whereHas('order', function($q) use ($businessId, $startDate, $endDate) {
             $q->where('business_id', $businessId)->where('status', 'completed')->whereBetween('created_at', [$startDate, $endDate]);
         })->sum(DB::raw('base_price * (qty_billed + qty_bonus)'));
 
-        $rincianBeban = FinanceCategory::where('type', 'out')->whereNotIn('code', ['EXP_PURCHASE', 'LIA_AP', 'ASSET_DEP_SUPPLIER', 'OP_SHIPPING'])
-            ->withSum(['ledgers' => function($q) use ($businessId, $startDate, $endDate) {
-                $q->where('business_id', $businessId)->whereBetween('transaction_date', [$startDate, $endDate]);
-            }], 'amount')->get()->filter(fn($cat) => $cat->ledgers_sum_amount > 0);
+        // ==============================================================
+        // PERBAIKAN FATAL: TARIK LANGSUNG DARI LEDGER (BUKAN DARI KATEGORI)
+        // ==============================================================
+        $excludedCategoryIds = FinanceCategory::whereIn('code', ['EXP_PURCHASE', 'LIA_AP', 'ASSET_DEP_SUPPLIER', 'OP_SHIPPING'])
+            ->pluck('id')->toArray();
+
+        $queryBeban = Ledger::query()
+            ->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
+            ->where('ledgers.business_id', $businessId)
+            ->where('ledgers.type', 'out')
+            ->whereNotIn('finance_categories.code', ['EXP_PURCHASE', 'LIA_AP', 'ASSET_DEP_SUPPLIER', 'OP_SHIPPING'])
+            ->whereBetween('ledgers.transaction_date', [$startDate, $endDate])
+            ->select(
+                'finance_categories.name as category_name', 
+                DB::raw('SUM(ledgers.amount) as total')
+            )
+            ->groupBy('finance_categories.id', 'finance_categories.name')
+            ->get();
 
         $bebanList = [];
         $totalBeban = 0;
 
-        // 3. Masukkan Beban Ongkir Riil secara otomatis ke baris pertama rincian beban
+        // 2. Masukkan Beban Ongkir (Dari Order)
         if ($bebanOngkir > 0) {
             $bebanList[] = [
                 'name' => 'Beban Pengiriman & Ekspedisi (Riil)',
@@ -410,13 +415,15 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             $totalBeban += $bebanOngkir;
         }
 
-        // 4. Masukkan sisa beban operasional lainnya dari Ledger
-        foreach ($rincianBeban as $beban) {
-            $bebanList[] = ['name' => $beban->name, 'amount' => (float) $beban->ledgers_sum_amount];
-            $totalBeban += $beban->ledgers_sum_amount;
+        // 3. Masukkan Beban dari Ledger (Pasti muncul namanya sekarang)
+        foreach ($queryBeban as $beban) {
+            $bebanList[] = [
+                'name' => $beban->category_name ?? 'Beban Lainnya', 
+                'amount' => (float) $beban->total
+            ];
+            $totalBeban += $beban->total;
         }
 
-        // 5. Laba Bersih kini otomatis tergerus oleh Beban Ongkir
         $labaBersih = (($omzetBarang + $omzetOngkir) - $hpp) - $totalBeban;
 
         // --- B. ARUS KAS (CASHFLOW) ---
@@ -427,8 +434,10 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $kasMasukList = [];
         $totalKasMasuk = 0;
         foreach ($queryKasMasuk as $kas) {
-            $name = $kas->financeCategory ? $kas->financeCategory->name : 'Uncategorized Income';
-            $kasMasukList[] = ['name' => $name, 'amount' => (float) $kas->total];
+            $kasMasukList[] = [
+                'name' => $kas->financeCategory ? $kas->financeCategory->name : 'Uncategorized Income', 
+                'amount' => (float) $kas->total
+            ];
             $totalKasMasuk += $kas->total;
         }
 
@@ -439,8 +448,10 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $kasKeluarList = [];
         $totalKasKeluar = 0;
         foreach ($queryKasKeluar as $kas) {
-            $name = $kas->financeCategory ? $kas->financeCategory->name : 'Uncategorized Expense';
-            $kasKeluarList[] = ['name' => $name, 'amount' => (float) $kas->total];
+            $kasKeluarList[] = [
+                'name' => $kas->financeCategory ? $kas->financeCategory->name : 'Uncategorized Expense', 
+                'amount' => (float) $kas->total
+            ];
             $totalKasKeluar += $kas->total;
         }
 
@@ -450,7 +461,12 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $totalPiutang = 0;
         foreach ($piutangQuery as $order) {
             if ($order->remaining_balance > 0) { 
-                $piutangList[] = ['date' => \Carbon\Carbon::parse($order->created_at)->format('d M Y'), 'order_number' => $order->order_number, 'customer' => $order->customer->name ?? 'Umum', 'remaining_balance' => (float)$order->remaining_balance];
+                $piutangList[] = [
+                    'date' => \Carbon\Carbon::parse($order->created_at)->format('d M Y'), 
+                    'order_number' => $order->order_number, 
+                    'customer' => $order->customer->name ?? 'Umum', 
+                    'remaining_balance' => (float) $order->remaining_balance
+                ];
                 $totalPiutang += $order->remaining_balance;
             }
         }
@@ -460,7 +476,12 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $totalHutang = 0;
         foreach ($hutangQuery as $purchase) {
             if ($purchase->remaining_balance > 0) {
-                $hutangList[] = ['date' => \Carbon\Carbon::parse($purchase->purchase_date)->format('d M Y'), 'invoice_number' => $purchase->invoice_number, 'supplier' => $purchase->supplier->name ?? 'Umum', 'remaining_balance' => (float)$purchase->remaining_balance];
+                $hutangList[] = [
+                    'date' => \Carbon\Carbon::parse($purchase->purchase_date)->format('d M Y'), 
+                    'invoice_number' => $purchase->invoice_number, 
+                    'supplier' => $purchase->supplier->name ?? 'Umum', 
+                    'remaining_balance' => (float) $purchase->remaining_balance
+                ];
                 $totalHutang += $purchase->remaining_balance;
             }
         }
