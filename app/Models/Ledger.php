@@ -11,6 +11,7 @@ class Ledger extends Model
     protected $fillable = [
         'business_id',
         'wallet_id',
+        'finance_category_id',
         'transaction_date',
         'description',
         'type',

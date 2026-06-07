@@ -33,20 +33,14 @@ use Filament\Support\Icons\Heroicon;
 use UnitEnum;
 use Filament\Pages\Page;
 use Filament\Facades\Filament;
-// Forms
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Components\DatePicker;
-// Infolists (Untuk Laba Rugi)
 use Filament\Infolists\Concerns\InteractsWithInfolists;
 use Filament\Infolists\Contracts\HasInfolists;
 use Filament\Infolists\Components\TextEntry;
-// Tables (Untuk Piutang)
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
-use Filament\Tables\Table;
-use Filament\Tables\Columns\TextColumn;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, HasActions
@@ -77,7 +71,6 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
     protected function getHeaderActions(): array
     {
         return [
-            
             Action::make('tutup_buku')
                 ->label('Tutup Buku (Akhir Bulan)')
                 ->icon('heroicon-o-lock-closed')
@@ -87,13 +80,13 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                 ->modalDescription('Tindakan ini akan mengunci/menyimpan kondisi Neraca, Piutang, Hutang, dan Laba/Rugi saat ini secara permanen ke dalam Arsip. Yakin ingin melanjutkan?')
                 ->action(function () {
                     $businessId = Filament::getTenant()?->id ?? auth()->user()->businesses()->first()?->id;
-                    $liveData = $this->getLiveData(); // Jepret foto data sekarang
+                    $liveData = $this->getLiveData(); 
 
                     MonthlyClosing::create([
                         'business_id' => $businessId,
-                        'period_name' => now()->translatedFormat('F Y'), // Contoh: "Juni 2024"
+                        'period_name' => now()->translatedFormat('F Y'), 
                         'closing_date' => now(),
-                        'snapshot_data' => $liveData, // Simpan array Laba Rugi & Neraca ke JSON
+                        'snapshot_data' => $liveData, 
                     ]);
 
                     Notification::make()
@@ -102,7 +95,6 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                         ->success()
                         ->send();
                         
-                    // Otomatis refresh opsi dropdown
                     $this->form->fill(['report_mode' => 'live']); 
                 }),
         ];
@@ -136,7 +128,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                             ->live()
                             ->required(),
                     ])
-                    ->visible(fn (Get $get) => $get('report_mode') === 'live'), // Sembunyikan tanggal kalau buka arsip
+                    ->visible(fn (Get $get) => $get('report_mode') === 'live'), 
             ])
             ->statePath('data');
     }
@@ -148,7 +140,9 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             ->schema([
                 Tabs::make('LaporanTabs')
                     ->tabs([
+                        // ==========================================
                         // TAB 1: LABA RUGI
+                        // ==========================================
                         Tab::make('Laba / Rugi')
                             ->icon('heroicon-o-document-currency-dollar')
                             ->schema([
@@ -156,13 +150,20 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                     ->schema([
                                         TextEntry::make('omzet_barang')->label('Pendapatan Penjualan')->money('IDR')->color('success'),
                                         TextEntry::make('omzet_ongkir')->label('Pendapatan Ongkir')->money('IDR')->color('success'),
-                                        TextEntry::make('hpp')->label('Harga Pokok Penjualan (HPP)')->money('IDR')->color('danger'),
+                                        TextEntry::make('hpp')->label('Harga Pokok Penjualan (HPP)')->money('IDR')->color('danger')->helperText('Termasuk modal dari barang bonus/gratis.'),
                                         TextEntry::make('laba_kotor')->label('Laba Kotor (Gross Profit)')->money('IDR')->weight('black')->size(TextSize::Large),
                                     ])->columns(2),
 
                                 Section::make('Rincian Beban Operasional')
-                                    ->schema($this->getBebanSchema())
-                                    ->columns(2),
+                                    ->schema([
+                                        // PENGGUNAAN REPEATABLE ENTRY MENGATASI BUG TAMPILAN
+                                        RepeatableEntry::make('rincian_beban')
+                                            ->label('')
+                                            ->schema([
+                                                TextEntry::make('name')->label('Kategori Beban')->weight('bold'),
+                                                TextEntry::make('amount')->label('Nominal Beban')->money('IDR')->color('danger'),
+                                            ])->columns(2)
+                                    ]),
 
                                 Section::make('Kesimpulan')
                                     ->schema([
@@ -176,18 +177,33 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                     ])->columns(2),
                             ]),
 
+                        // ==========================================
+                        // TAB 2: ARUS KAS
+                        // ==========================================
                         Tab::make('Arus Kas (Cashflow)')
                             ->icon('heroicon-o-arrow-path-rounded-square')
                             ->schema([
                                 Section::make('Kas Masuk (Cash In)')
                                     ->icon('heroicon-o-arrow-down-left')
-                                    ->schema($this->getSchemaKasMasuk())
-                                    ->columns(2),
+                                    ->schema([
+                                        RepeatableEntry::make('kas_masuk')
+                                            ->label('')
+                                            ->schema([
+                                                TextEntry::make('name')->label('Sumber Pemasukan')->weight('bold'),
+                                                TextEntry::make('amount')->label('Nominal')->money('IDR')->color('success'),
+                                            ])->columns(2)
+                                    ]),
                                     
                                 Section::make('Kas Keluar (Cash Out)')
                                     ->icon('heroicon-o-arrow-up-right')
-                                    ->schema($this->getSchemaKasKeluar())
-                                    ->columns(2),
+                                    ->schema([
+                                        RepeatableEntry::make('kas_keluar')
+                                            ->label('')
+                                            ->schema([
+                                                TextEntry::make('name')->label('Tujuan Pengeluaran')->weight('bold'),
+                                                TextEntry::make('amount')->label('Nominal')->money('IDR')->color('danger'),
+                                            ])->columns(2)
+                                    ]),
                                     
                                 Section::make('Ringkasan Arus Kas')
                                     ->schema([
@@ -202,7 +218,9 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                     ])->columns(2),
                             ]),
 
-                        // TAB 2: PIUTANG (MENGGUNAKAN REPEATABLE ENTRY)
+                        // ==========================================
+                        // TAB 3: PIUTANG
+                        // ==========================================
                         Tab::make('Piutang Pelanggan')
                             ->icon('heroicon-o-arrow-right-end-on-rectangle')
                             ->schema([
@@ -221,10 +239,12 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                         TextEntry::make('customer')->label('Pelanggan'),
                                         TextEntry::make('remaining_balance')->label('Sisa Tagihan')->money('IDR')->color('danger')->weight('bold'),
                                     ])
-                                    ->columns(4) // Ditampilkan sejajar ke samping seperti baris
+                                    ->columns(4) 
                             ]),
 
-                        // TAB 3: HUTANG (MENGGUNAKAN REPEATABLE ENTRY)
+                        // ==========================================
+                        // TAB 4: HUTANG
+                        // ==========================================
                         Tab::make('Hutang Supplier')
                             ->icon('heroicon-o-arrow-left-start-on-rectangle')
                             ->schema([
@@ -246,7 +266,9 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                     ->columns(4)
                             ]),
 
-                        // TAB 4: NERACA
+                        // ==========================================
+                        // TAB 5: NERACA
+                        // ==========================================
                         Tab::make('Neraca (Balance Sheet)')
                             ->icon('heroicon-o-scale')
                             ->schema([
@@ -272,6 +294,10 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                         ])->columnSpan(1),
                                 ])
                             ]),
+                            
+                        // ==========================================
+                        // TAB 6: ANALISA
+                        // ==========================================
                         Tab::make('Analisa Usaha')
                             ->icon('heroicon-o-presentation-chart-line')
                             ->schema([
@@ -343,7 +369,6 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             return $this->getLiveData();
         }
 
-        // JIKA MODE ARSIP, AMBIL DARI DATABASE JSON!
         $arsip = MonthlyClosing::find($mode);
         return $arsip ? $arsip->snapshot_data : $this->getLiveData();
     }
@@ -351,25 +376,30 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
     protected function getLiveData(): array
     {
         $businessId = Filament::getTenant()?->id ?? auth()->user()->businesses()->first()?->id;
-        $startDate = $this->data['start_date'] ?? now()->startOfMonth()->format('Y-m-d');
-        $endDate = $this->data['end_date'] ?? now()->format('Y-m-d');
+        
+        // PERBAIKAN FATAL: Tambahkan Jam 00:00:00 dan 23:59:59 agar tidak ada transaksi yang terlewat!
+        $startDate = ($this->data['start_date'] ?? now()->startOfMonth()->format('Y-m-d')) . ' 00:00:00';
+        $endDate = ($this->data['end_date'] ?? now()->format('Y-m-d')) . ' 23:59:59';
 
         // --- A. LABA RUGI ---
-        $omzetBarang = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])->sum(DB::raw('total_amount - shipping_fee_billed'));
-        $omzetOngkir = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])->sum('shipping_fee_billed');
+        $omzetBarang = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('created_at', [$startDate, $endDate])->sum(DB::raw('total_amount - shipping_fee_billed'));
+        $omzetOngkir = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('created_at', [$startDate, $endDate])->sum('shipping_fee_billed');
+        
+        // PERBAIKAN FATAL: Tambahkan (qty_billed + qty_bonus) agar modal barang gratisan/bonus tetap memotong Laba!
         $hpp = OrderItem::whereHas('order', function($q) use ($businessId, $startDate, $endDate) {
-            $q->where('business_id', $businessId)->where('status', 'completed')->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
-        })->sum(DB::raw('base_price * qty_billed'));
+            $q->where('business_id', $businessId)->where('status', 'completed')->whereBetween('created_at', [$startDate, $endDate]);
+        })->sum(DB::raw('base_price * (qty_billed + qty_bonus)'));
 
         $rincianBeban = FinanceCategory::where('type', 'out')->whereNotIn('code', ['EXP_PURCHASE', 'LIA_AP', 'ASSET_DEP_SUPPLIER'])
             ->withSum(['ledgers' => function($q) use ($businessId, $startDate, $endDate) {
                 $q->where('business_id', $businessId)->whereBetween('transaction_date', [$startDate, $endDate]);
             }], 'amount')->get()->filter(fn($cat) => $cat->ledgers_sum_amount > 0);
 
-        $bebanArray = [];
+        // UBAH ARRAY JADI LIST UNTUK REPEATABLE ENTRY
+        $bebanList = [];
         $totalBeban = 0;
         foreach ($rincianBeban as $beban) {
-            $bebanArray[$beban->name] = (float) $beban->ledgers_sum_amount;
+            $bebanList[] = ['name' => $beban->name, 'amount' => (float) $beban->ledgers_sum_amount];
             $totalBeban += $beban->ledgers_sum_amount;
         }
 
@@ -380,11 +410,11 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->select('finance_category_id', DB::raw('SUM(amount) as total'))->groupBy('finance_category_id')->get();
             
-        $kasMasukArray = [];
+        $kasMasukList = [];
         $totalKasMasuk = 0;
         foreach ($queryKasMasuk as $kas) {
             $name = $kas->financeCategory ? $kas->financeCategory->name : 'Uncategorized Income';
-            $kasMasukArray[$name] = (float) $kas->total;
+            $kasMasukList[] = ['name' => $name, 'amount' => (float) $kas->total];
             $totalKasMasuk += $kas->total;
         }
 
@@ -392,11 +422,11 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             ->whereBetween('transaction_date', [$startDate, $endDate])
             ->select('finance_category_id', DB::raw('SUM(amount) as total'))->groupBy('finance_category_id')->get();
             
-        $kasKeluarArray = [];
+        $kasKeluarList = [];
         $totalKasKeluar = 0;
         foreach ($queryKasKeluar as $kas) {
             $name = $kas->financeCategory ? $kas->financeCategory->name : 'Uncategorized Expense';
-            $kasKeluarArray[$name] = (float) $kas->total;
+            $kasKeluarList[] = ['name' => $name, 'amount' => (float) $kas->total];
             $totalKasKeluar += $kas->total;
         }
 
@@ -440,11 +470,11 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         return [
             // Laba Rugi
             'omzet_barang' => (float)$omzetBarang, 'omzet_ongkir' => (float)$omzetOngkir, 'hpp' => (float)$hpp,
-            'laba_kotor' => (float)(($omzetBarang + $omzetOngkir) - $hpp), 'rincian_beban' => $bebanArray, 'total_beban' => (float)$totalBeban, 'laba_bersih' => (float)$labaBersih,
+            'laba_kotor' => (float)(($omzetBarang + $omzetOngkir) - $hpp), 'rincian_beban' => $bebanList, 'total_beban' => (float)$totalBeban, 'laba_bersih' => (float)$labaBersih,
             
             // Arus Kas
-            'kas_masuk' => $kasMasukArray, 'total_kas_masuk' => (float)$totalKasMasuk,
-            'kas_keluar' => $kasKeluarArray, 'total_kas_keluar' => (float)$totalKasKeluar,
+            'kas_masuk' => $kasMasukList, 'total_kas_masuk' => (float)$totalKasMasuk,
+            'kas_keluar' => $kasKeluarList, 'total_kas_keluar' => (float)$totalKasKeluar,
             'net_cashflow' => (float)($totalKasMasuk - $totalKasKeluar),
 
             // Hutang Piutang
@@ -463,50 +493,5 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             'debt_ratio' => $debtRatio,
             'status_hutang' => $debtRatio <= 40 ? 'Rendah Risiko' : ($debtRatio <= 60 ? 'Risiko Sedang' : 'Risiko Sangat Tinggi'),
         ];
-    }
-
-    protected function getBebanSchema(): array
-    {
-        $data = $this->getReportData();
-        $schema = [];
-        
-        if (!empty($data['rincian_beban'])) {
-            foreach ($data['rincian_beban'] as $key => $value) {
-                // Men-generate skema Infolist dinamis berdasarkan akun yang terpakai
-                $schema[] = TextEntry::make('rincian_beban.' . $key)->label($key)->money('IDR')->color('danger');
-            }
-        } else {
-             $schema[] = TextEntry::make('no_beban')->label('')->default('Tidak ada beban operasional pada periode ini.');
-        }
-
-        return $schema;
-    }
-
-    protected function getSchemaKasMasuk(): array
-    {
-        $data = $this->getReportData();
-        $schema = [];
-        if (!empty($data['kas_masuk'])) {
-            foreach ($data['kas_masuk'] as $key => $val) {
-                $schema[] = TextEntry::make('kas_masuk.' . $key)->label($key)->money('IDR')->color('success');
-            }
-        } else {
-             $schema[] = TextEntry::make('no_data_in')->label('')->default('Tidak ada uang masuk.');
-        }
-        return $schema;
-    }
-
-    protected function getSchemaKasKeluar(): array
-    {
-        $data = $this->getReportData();
-        $schema = [];
-        if (!empty($data['kas_keluar'])) {
-            foreach ($data['kas_keluar'] as $key => $val) {
-                $schema[] = TextEntry::make('kas_keluar.' . $key)->label($key)->money('IDR')->color('danger');
-            }
-        } else {
-             $schema[] = TextEntry::make('no_data_out')->label('')->default('Tidak ada uang keluar.');
-        }
-        return $schema;
     }
 }

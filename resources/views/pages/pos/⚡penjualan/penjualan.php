@@ -300,7 +300,23 @@ new #[Layout('layouts::pos')] class extends Component
             // ==============================================================
             foreach ($this->cart as $item) {
                 $productModel = Product::find($item['product_id']);
-                $hppSaatIni = $productModel ? (float)$productModel->base_price : 0;
+                
+                // 1. Ambil HPP Satuan Dasar (1 kg/pcs)
+                $hppDasar = $productModel ? (float)$productModel->base_price : 0;
+                $conversionRate = 1; // Default pengali jika pakai satuan dasar
+
+                // 2. Cek apakah pakai satuan turunan (Box/Dus/Karung)
+                if (!empty($item['unit_id'])) {
+                    $unitModel = \App\Models\ProductUnit::find($item['unit_id']);
+                    if ($unitModel) {
+                        // ⚠️ PENTING: Ganti 'conversion_rate' dengan nama kolom di database lu 
+                        // yang nyimpen angka "isi" per satuan (misal: qty, capacity, isi, multiplier)
+                        $conversionRate = (float)($unitModel->conversion_value ?? 1); 
+                    }
+                }
+
+                // 3. Kalikan HPP Dasar dengan Isi Konversi
+                $hppFinal = $hppDasar * $conversionRate;
 
                 OrderItem::create([
                     'order_id' => $order->id,
@@ -308,7 +324,7 @@ new #[Layout('layouts::pos')] class extends Component
                     'qty_billed' => (int)$item['qty_billed'],
                     'qty_bonus' => (int)$item['qty_bonus'],
                     'unit_price' => (float)$item['price'],
-                    'base_price' => $hppSaatIni, // <--- SIMPAN HPP HISTORIS DI SINI!
+                    'base_price' => $hppFinal, // <--- SEKARANG SIMPAN HPP YANG SUDAH DIKALI ISI!
                     'product_unit_id' => $item['unit_id'] ?: null,
                     'commission_per_unit' => $this->applyCommission ? (float)($item['commission_per_unit'] ?? 0) : 0,
                     'subtotal' => (float)$item['price'] * (int)$item['qty_billed'],
