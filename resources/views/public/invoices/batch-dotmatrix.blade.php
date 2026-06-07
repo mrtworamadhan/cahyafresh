@@ -141,7 +141,7 @@
                         
                         <td style="vertical-align: bottom; height: 55px;">
                             @if($order->business->signature)
-                                <img src="{{ public_path('storage/' . $order->business->signature) }}" 
+                                <img src="{{ asset('storage/' . $order->business->signature) }}" 
                                     alt="TTD" 
                                     style="height: 40px; object-fit: contain; margin-top: 5px;">
                             @else
@@ -172,7 +172,7 @@
     
     <div class="text-center" style="margin: 10px 0;">
         <span class="header-title">SURAT JALAN</span><br>
-        <span>NO: SJ-{{ $order->order_number }}</span>
+        <span>NO: DO-{{ $order->order_number }}</span>
     </div>
 
     <table>
@@ -182,6 +182,20 @@
             </td>
             <td width="50%" style="border: 1px solid #000; padding: 5px;">
                 <strong>PENERIMA:</strong><br>{{ $order->customer->name }}<br>{{ $order->customer->address }}
+            </td>
+        </tr>
+    </table>
+
+    <table style="margin-top: 10px; margin-bottom: 10px;">
+        <tr>
+            <td style="border: 1px solid #000; padding: 5px;">
+                <strong>INFORMASI PENGIRIMAN:</strong><br>
+                @if($order->delivery && $order->delivery->courier)
+                    Kurir: {{ $order->delivery->courier->name }} 
+                    {{ $order->delivery->courier->vehicle_plate ? '| Plat: ' . $order->delivery->courier->vehicle_plate : '' }}
+                @else
+                    Kurir: -
+                @endif
             </td>
         </tr>
     </table>

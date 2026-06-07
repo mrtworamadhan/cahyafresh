@@ -167,7 +167,7 @@
                 <td width="40%" align="center" style="font-size: 13px;">
                     <p style="margin-bottom: 40px;">Hormat Kami,</p>
                     @if($order->business->signature)
-                        <img src="{{ asset('storage/' . $order->business->signature) }}" style="height: 60px; display: block; margin: 10px auto;">
+                        <img src="{{ (isset($is_pdf) && $is_pdf) ? public_path('storage/' . $order->business->signature) : asset('storage/' . $order->business->signature) }}" style="height: 60px; display: block; margin: 10px auto;">
                     @endif
                     <p style="font-weight: bold; text-decoration: underline; margin: 0;">{{ $order->business->signer_name ?? 'Otoritas Toko' }}</p>
                     <p style="font-size: 11px; color: #666; margin: 0;">{{ $order->business->signer_title ?? 'Kasir Utama' }}</p>
