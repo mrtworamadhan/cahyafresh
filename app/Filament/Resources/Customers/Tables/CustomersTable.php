@@ -55,66 +55,75 @@ class CustomersTable
                             ->required(),
                         TextInput::make('amount')
                             ->label('Nominal Deposit')
-                            // ->numeric() // <--- PASTIKAN INI DIHAPUS BIAR GAK ERROR MASKING
                             ->prefix('Rp')
                             ->required()
-                            ->mask(RawJs::make('$money($input, \',\', \'.\', 2)')),
+                            ->mask(RawJs::make('$money($input, \',\', \'.\', 2)')), 
                         TextInput::make('notes')
                             ->label('Catatan')
                             ->placeholder('Contoh: Titip uang untuk PO minggu depan'),
                     ])
                     ->action(function (array $data, $record) {
-                        $cleanAmount = self::getSanitizedNumber($data['amount']);
-
-                        // TARIK KATEGORI DEPOSIT KONSUMEN
-                        $kategoriDepositKonsumen = \App\Models\FinanceCategory::where('code', 'LIA_DEP_CUSTOMER')->first();
-
-                        Ledger::create([
+                        $rawAmount = (string) $data['amount'];
+                        $cleanString = str_replace(['.', ','], ['', '.'], $rawAmount);
+                        
+                        // 3. Jadikan angka float murni (Contoh: 189800.00)
+                        $cleanAmount = (float) $cleanString; 
+                            Ledger::create([
                             'business_id' => $record->business_id,
                             'wallet_id' => $data['wallet_id'],
-                            'finance_category_id' => $kategoriDepositKonsumen?->id, // <--- TERIKAT KE COA
+                            'finance_category_id' => \App\Models\FinanceCategory::where('code', 'INC_DEPOSIT')->first()?->id,
                             'transaction_date' => now(),
-                            'description' => 'Terima Deposit: ' . ($data['notes'] ?: 'Titip Saldo'),
-                            'type' => 'in', // Uang Masuk ke kas
-                            'amount' => $cleanAmount,
+                            'description' => 'Terima Deposit: ' . ($data['notes'] ?: 'Titipan pelanggan'),
+                            'type' => 'in', 
+                            'amount' => $cleanAmount, // Masukkan angka yang udah bersih!
                             'contact_type' => \App\Models\Customer::class,
                             'contact_id' => $record->id,
                         ]);
 
-                        $record->increment('deposit_balance', $cleanAmount);
-
+                        // Tambah Saldo Dompet Fisik
                         $wallet = \App\Models\Wallet::find($data['wallet_id']);
-                        $wallet->increment('balance', $cleanAmount);
+                        if ($wallet) {
+                            $wallet->balance += $cleanAmount;
+                            $wallet->save();
+                        }
 
-                        Notification::make()->title('Deposit Berhasil Dicatat!')->success()->send();
+                        // Tambah Saldo Deposit Customer
+                        $record->balance += $cleanAmount;
+                        $record->save();
+
+                        Notification::make()->title('Deposit Berhasil Diterima!')->success()->send();
                     }),
 
                 Action::make('cairkan_komisi')
                     ->label('Cairkan Komisi')
                     ->icon('heroicon-o-gift')
-                    ->color('warning') // Warna emas/kuning
-                    // Tombol ini HANYA MUNCUL jika pelanggan punya saldo komisi > 0
+                    ->color('warning') 
                     ->visible(fn (\App\Models\Customer $record) => $record->commission_balance > 0)
                     ->form(fn (\App\Models\Customer $record) => [
                         Select::make('wallet_id')
                             ->label('Tarik Dana Dari Dompet?')
                             ->options(\App\Models\Wallet::where('business_id', $record->business_id)->pluck('name', 'id'))
                             ->required(),
+                        
                         TextInput::make('amount')
                             ->label('Nominal Pencairan')
-                            ->numeric()
                             ->prefix('Rp')
-                            ->default($record->commission_balance) // Default isi otomatis dengan seluruh saldo komisinya
+                            ->default($record->commission_balance) // Default isi otomatis dengan seluruh saldo
                             ->required()
-                            ->mask(RawJs::make('$money($input, \',\', \'.\', 2)')),
+                            ->mask(RawJs::make('$money($input, \',\', \'.\', 0)')) 
+                            ->formatStateUsing(function ($state) {
+                                return $state ? str_replace('.', ',', (string)(float)$state) : null;
+                            }),
+                            
                         TextInput::make('notes')
                             ->label('Catatan')
                             ->default('Pencairan komisi agen/referral'),
                     ])
                     ->action(function (array $data, $record) {
-                        $cleanAmount = self::getSanitizedNumber($data['amount']);
+                        $rawAmount = (string) $data['amount'];
+                        $cleanString = str_replace(['.', ','], ['', '.'], $rawAmount);
+                        $cleanAmount = (float) $cleanString; // Jadi angka murni
 
-                        // Validasi jangan sampai nyairin duit lebih besar dari saldonya
                         if ($cleanAmount > $record->commission_balance) {
                             Notification::make()->title('Gagal! Nominal melebihi saldo komisi.')->danger()->send();
                             return;
@@ -125,7 +134,7 @@ class CustomersTable
                         Ledger::create([
                             'business_id' => $record->business_id,
                             'wallet_id' => $data['wallet_id'],
-                            'finance_category_id' => $kategoriKomisi?->id, // <--- SUDAH AMAN
+                            'finance_category_id' => $kategoriKomisi?->id,
                             'transaction_date' => now(),
                             'description' => 'Pencairan Komisi: ' . ($data['notes'] ?: 'Referral'),
                             'type' => 'out', 
@@ -133,15 +142,17 @@ class CustomersTable
                             'contact_type' => \App\Models\Customer::class,
                             'contact_id' => $record->id,
                         ]);
-
-                        // 2. Potong Saldo Komisi Agen
-                        $cleanAmount = (float) $cleanAmount;
+                        
+                        // Potong Saldo Komisi Agen
                         $record->commission_balance -= $cleanAmount;
                         $record->save();
 
-                        // 3. Potong Saldo Fisik di Dompet Kasir
+                        // Potong Saldo Fisik di Dompet Kasir
                         $wallet = \App\Models\Wallet::find($data['wallet_id']);
-                        $wallet->decrement('balance', $cleanAmount);
+                        if ($wallet) {
+                            $wallet->balance -= $cleanAmount;
+                            $wallet->save();
+                        }
 
                         Notification::make()->title('Komisi Berhasil Dicairkan!')->success()->send();
                     }),
