@@ -92,7 +92,7 @@
             </div>
         @endforelse
     </div>
-
+    
     <div x-show="activeTab === 'draft'" style="display: none;" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" class="p-4 space-y-4">
         @forelse($draftOrders as $order)
             <div x-data="{ expanded: false }" class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-amber-200 dark:border-amber-900/50 overflow-hidden">
