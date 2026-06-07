@@ -44,6 +44,22 @@ class CustomersTable
             ])
             ->recordActions([
                 EditAction::make(),
+                Action::make('share_portal')
+                    ->label('Share Portal')
+                    ->icon('heroicon-o-share')
+                    ->color('info')
+                    ->action(function ($record) {
+                        // Ganti URL ini dengan URL portal yang beneran lu pake nanti
+                        $link = url('/portal/' . $record->id); 
+                        
+                        // Lu bisa pilih mau langsung copy ke clipboard
+                        // Atau kalau mau simpel, pake script buat buka WA:
+                        $pesan = "Halo {$record->name}, berikut adalah link portal pelanggan Cahya Fresh untuk cek riwayat order dan komisi lu ya: " . $link;
+                        $waLink = "https://wa.me/" . preg_replace('/[^0-9]/', '', $record->phone) . "?text=" . urlencode($pesan);
+                        
+                        return redirect()->away($waLink);
+                    })
+                    ->visible(fn ($record) => !empty($record->phone)),
                 Action::make('terima_deposit')
                     ->label('Terima Deposit')
                     ->icon('heroicon-o-arrow-down-left')
