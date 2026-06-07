@@ -25,11 +25,13 @@ class WalletForm
                         'bank' => 'Bank',
                         'cash' => 'Kas',
                     ])
-                    ->required(),
+                    ->required()
+                    ->live(), // <--- TAMBAHKAN INI BRO
+
                 TextInput::make('account_number')
                     ->label('Nomor Rekening')
                     ->placeholder('Contoh: 1234567890')
-                    ->visible(fn ($get) => $get('type') === 'bank')
+                    ->visible(fn (Get $get) => $get('type') === 'bank') // Disarankan pakai Get class di V3
                     ->maxLength(255),
 
                 Toggle::make('is_active')
