@@ -255,6 +255,7 @@ new #[Layout('layouts::pos')] class extends Component
             'unpaidPurchases' => Purchase::with('supplier')->where('business_id', $businessId)->where('status', 'unpaid')->latest()->get(),
             'todaySales' => $todaySales,
             'todayExpenses' => $todayExpenses,
+            'expenseCategories' => \App\Models\FinanceCategory::where('type', 'out')->get(),
         ];
     }
 };

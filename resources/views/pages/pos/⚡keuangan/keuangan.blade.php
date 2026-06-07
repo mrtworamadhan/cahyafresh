@@ -62,6 +62,17 @@
                         </div>
 
                         <div>
+                            <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">Kategori Pengeluaran</label>
+                            <select wire:model.defer="expenseCategoryId" class="w-full text-sm font-bold bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-amber-500">
+                                <option value="">-- Pilih Kategori Pengeluaran --</option>
+                                @foreach($expenseCategories as $category)
+                                    <option value="{{ $category->id }}">{{ $category->name }}</option>
+                                @endforeach
+                            </select>
+                            @error('expenseCategoryId') <span class="text-xs text-red-500 font-bold mt-1">{{ $message }}</span> @enderror
+                        </div>
+
+                        <div>
                             <label class="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">Keperluan / Keterangan</label>
                             <input type="text" wire:model.defer="expenseNote" placeholder="Contoh: Bensin Operasional, Makan Siang, dll..." class="w-full text-sm font-semibold bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-amber-500">
                             @error('expenseNote') <span class="text-xs text-red-500 font-bold mt-1">{{ $message }}</span> @enderror
