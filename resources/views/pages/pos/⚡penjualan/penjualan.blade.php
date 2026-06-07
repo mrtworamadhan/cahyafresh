@@ -50,7 +50,7 @@
             </div>
         </div>
 
-        <div class="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl flex flex-col h-full shadow-sm">
+        <div class="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl flex flex-col h-full overflow-hidden shadow-sm">
             
             <div class="p-4 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 rounded-t-xl shrink-0 flex flex-col gap-3">
                 <div class="flex justify-between items-center">
@@ -70,7 +70,7 @@
                 </select>
             </div>
 
-            <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+            <div class="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-3">
                 @forelse($cart as $index => $item)
                     <div class="flex flex-col gap-3 p-3 border border-zinc-200 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800/80 shadow-sm relative group">
                         <div class="flex justify-between items-start pr-6">
