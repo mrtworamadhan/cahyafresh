@@ -50,7 +50,7 @@ class CustomersTable
                     ->color('info')
                     ->action(function ($record) {
                         // Ganti URL ini dengan URL portal yang beneran lu pake nanti
-                        $link = url('/portal/' . $record->id); 
+                        $link = url('/portal/' . $record->slug); 
                         
                         // Lu bisa pilih mau langsung copy ke clipboard
                         // Atau kalau mau simpel, pake script buat buka WA:
