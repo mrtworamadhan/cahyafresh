@@ -54,6 +54,35 @@ class OrdersTable
             ->defaultSort('order_date', 'desc')
             ->recordActions([
                 EditAction::make(),
+                Action::make('share_wa')
+                    ->label('Kirim WA')
+                    ->icon('heroicon-o-chat-bubble-left-ellipsis')
+                    ->color('success')
+                    ->action(function ($record) {
+                        // Generate Link
+                        $invoiceLink = url('/invoice/' . $record->order_number);
+                        // Pastikan route portal lu sesuai, contoh: /portal/{slug}
+                        $portalLink = url('/portal/' . $record->customer->slug); 
+                        
+                        // Format Pesan WA
+                        $pesan = "Halo *{$record->customer->name}*,\n\n";
+                        $pesan .= "Berikut adalah tautan Invoice untuk pembelanjaan Anda:\n{$invoiceLink}\n\n";
+                        $pesan .= "Update pesanan dan riwayat tagihan Anda juga sudah tersedia di portal pelanggan, silakan cek di:\n{$portalLink}\n\n";
+                        $pesan .= "Terima kasih telah berbelanja di Cahya Fresh!";
+                        
+                        // Bersihkan nomor HP dari karakter aneh
+                        $noHp = preg_replace('/[^0-9]/', '', $record->customer->phone);
+                        
+                        // Ubah 08 jadi 628
+                        if (str_starts_with($noHp, '0')) {
+                            $noHp = '62' . substr($noHp, 1);
+                        }
+
+                        $waLink = "https://wa.me/{$noHp}?text=" . urlencode($pesan);
+                        
+                        return redirect()->away($waLink);
+                    })
+                    ->visible(fn ($record) => !empty($record->customer->phone)),
                 Action::make('download_pdf')
                     ->label('Unduh PDF')
                     ->icon('heroicon-o-arrow-down-tray')

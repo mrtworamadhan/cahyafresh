@@ -439,12 +439,30 @@ new #[Layout('layouts::pos')] class extends Component
         $this->latestOrderNumber = $orderNumber;
         $this->shareLink = url('/invoice/' . $orderNumber);
         $businessName = $tenant ? $tenant->name : (auth()->user()->businesses()->first()?->name ?? 'Toko Kami');
-        $customerName = $this->customerId ? (Customer::find($this->customerId)?->name ?? '') : '';
         
-        $customerPhone = $this->customerId ? (Customer::find($this->customerId)?->phone ?? '') : '';
-        if (str_starts_with($customerPhone, '0')) $customerPhone = '62' . substr($customerPhone, 1);
+        // Tarik data customer (cukup 1 kali query ke database)
+        $customer = $this->customerId ? \App\Models\Customer::find($this->customerId) : null;
+        $customerName = $customer ? $customer->name : 'Pelanggan';
+        
+        // Bersihkan nomor HP dari spasi atau strip
+        $customerPhone = $customer && $customer->phone ? preg_replace('/[^0-9]/', '', $customer->phone) : '';
+        if (str_starts_with($customerPhone, '0')) {
+            $customerPhone = '62' . substr($customerPhone, 1);
+        }
 
-        $waText = urlencode("Halo {$customerName}, berikut adalah tautan Invoice untuk pembelanjaan Anda: \n\n" . $this->shareLink . "\n\nTerima kasih telah berbelanja di {$businessName}!");
+        // Susun teks pesan WA
+        $pesan = "Halo *{$customerName}*,\n\n";
+        $pesan .= "Berikut adalah tautan Invoice untuk pembelanjaan Anda:\n" . $this->shareLink . "\n\n";
+        
+        // Kalau customernya punya data dan punya slug portal, tambahkan link portal
+        if ($customer && $customer->slug) {
+            $portalLink = url('/portal/' . $customer->slug);
+            $pesan .= "Update pesanan dan riwayat tagihan Anda juga sudah tersedia di portal pelanggan, silakan cek di:\n{$portalLink}\n\n";
+        }
+
+        $pesan .= "Terima kasih telah berbelanja di *{$businessName}*!";
+        
+        $waText = urlencode($pesan);
         $this->waLink = $customerPhone ? "https://wa.me/{$customerPhone}?text={$waText}" : "https://wa.me/?text={$waText}";
 
         // Reset Kasir, termasuk editOrderId

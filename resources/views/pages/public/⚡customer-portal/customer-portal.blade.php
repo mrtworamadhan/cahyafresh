@@ -29,15 +29,20 @@
     </div>
 
     <div class="px-4 mt-6">
-        <div class="flex p-1 bg-zinc-200 dark:bg-zinc-800 rounded-xl">
+        <div class="flex p-1 bg-zinc-200 dark:bg-zinc-800 rounded-xl overflow-x-auto gap-1">
             <button @click="activeTab = 'unpaid'" 
                     :class="activeTab === 'unpaid' ? 'bg-white dark:bg-zinc-700 shadow text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-700'"
-                    class="flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-200">
+                    class="flex-1 whitespace-nowrap py-2 px-3 text-[11px] sm:text-sm font-bold rounded-lg transition-all duration-200">
                 Belum Lunas ({{ count($unpaidOrders) }})
+            </button>
+            <button @click="activeTab = 'draft'" 
+                    :class="activeTab === 'draft' ? 'bg-white dark:bg-zinc-700 shadow text-amber-600 dark:text-amber-400' : 'text-zinc-500 hover:text-zinc-700'"
+                    class="flex-1 whitespace-nowrap py-2 px-3 text-[11px] sm:text-sm font-bold rounded-lg transition-all duration-200">
+                PO / Disiapkan ({{ count($draftOrders) }})
             </button>
             <button @click="activeTab = 'paid'" 
                     :class="activeTab === 'paid' ? 'bg-white dark:bg-zinc-700 shadow text-green-600 dark:text-green-400' : 'text-zinc-500 hover:text-zinc-700'"
-                    class="flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-200">
+                    class="flex-1 whitespace-nowrap py-2 px-3 text-[11px] sm:text-sm font-bold rounded-lg transition-all duration-200">
                 Riwayat ({{ count($paidOrders) }})
             </button>
         </div>
@@ -69,38 +74,6 @@
                             @endforeach
                         </div>
                         
-                        <div class="pt-3 border-t border-dashed border-zinc-200 dark:border-zinc-600 space-y-1">
-                            @if($order->shipping_fee_billed > 0)
-                                <div class="flex justify-between text-xs font-bold text-zinc-500">
-                                    <span>Ongkos Kirim</span>
-                                    <span>+ Rp {{ number_format($order->shipping_fee_billed, 0, ',', '.') }}</span>
-                                </div>
-                            @endif
-                            @if($order->discount_amount > 0)
-                                <div class="flex justify-between text-xs font-bold text-green-500">
-                                    <span>Diskon</span>
-                                    <span>- Rp {{ number_format($order->discount_amount, 0, ',', '.') }}</span>
-                                </div>
-                            @endif
-                        </div>
-
-                        @if($order->delivery)
-                            <div class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/50">
-                                <p class="text-[10px] font-black uppercase text-blue-500 tracking-wider mb-1">Status Pengiriman</p>
-                                <div class="flex items-center gap-2 mb-2">
-                                    <x-heroicon-s-truck class="w-4 h-4 text-blue-600" />
-                                    <span class="text-xs font-bold text-blue-800 dark:text-blue-300">
-                                        {{ $order->delivery->status === 'delivered' ? 'Pesanan Telah Tiba' : 'Dalam Proses Pengiriman' }}
-                                    </span>
-                                </div>
-                                @if($order->delivery->status === 'delivered' && $order->delivery->proof_photo_path)
-                                    <a href="{{ Storage::url($order->delivery->proof_photo_path) }}" target="_blank" class="w-full block text-center py-2 bg-white dark:bg-zinc-800 text-blue-600 border border-blue-200 dark:border-blue-700 rounded-lg text-xs font-bold hover:bg-blue-100 transition">
-                                        Lihat Foto Bukti & Tanda Tangan
-                                    </a>
-                                @endif
-                            </div>
-                        @endif
-                        
                         <div class="mt-3 flex gap-2">
                             <a href="/invoice/{{ $order->order_number }}" target="_blank" class="flex-1 flex justify-center items-center gap-1 py-2.5 bg-zinc-100 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-[11px] font-bold rounded-lg hover:bg-zinc-200 transition">
                                 <x-heroicon-o-eye class="w-4 h-4" /> Lihat Nota
@@ -120,9 +93,51 @@
         @endforelse
     </div>
 
+    <div x-show="activeTab === 'draft'" style="display: none;" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" class="p-4 space-y-4">
+        @forelse($draftOrders as $order)
+            <div x-data="{ expanded: false }" class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-amber-200 dark:border-amber-900/50 overflow-hidden">
+                <button @click="expanded = !expanded" class="w-full p-4 flex justify-between items-center text-left bg-amber-50/50 dark:bg-amber-900/10 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition">
+                    <div>
+                        <span class="inline-block px-2 py-1 bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400 text-[10px] font-black uppercase rounded mb-1">Sedang Disiapkan</span>
+                        <h3 class="font-bold text-sm">{{ $order->order_number }}</h3>
+                        <p class="text-xs text-zinc-500">Estimasi Kirim: {{ $order->delivery_date ? \Carbon\Carbon::parse($order->delivery_date)->format('d M Y') : 'Menunggu Info' }}</p>
+                    </div>
+                    <div class="text-right flex flex-col items-end gap-1">
+                        <span class="text-lg font-black text-amber-600 dark:text-amber-500">Rp {{ number_format($order->total_amount, 0, ',', '.') }}</span>
+                        <x-heroicon-o-chevron-down class="w-4 h-4 text-zinc-400 transition-transform duration-300" x-bind:class="expanded ? 'rotate-180' : ''" />
+                    </div>
+                </button>
+
+                <div x-show="expanded" x-collapse>
+                    <div class="p-4 border-t border-zinc-100 dark:border-zinc-700">
+                        <div class="space-y-2 mb-4">
+                            @foreach($order->orderItems as $item)
+                                <div class="flex justify-between text-xs font-medium">
+                                    <span class="text-zinc-600 dark:text-zinc-400">{{ $item->qty_billed }}x {{ $item->product->name }}</span>
+                                    <span>Rp {{ number_format($item->subtotal, 0, ',', '.') }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                        
+                        <div class="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800/50 text-center">
+                            <p class="text-xs font-bold text-amber-800 dark:text-amber-300">
+                                Pesanan ini sedang direkap/disiapkan oleh gudang dan belum masuk tagihan.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @empty
+            <div class="text-center py-10 opacity-50">
+                <x-heroicon-o-clock class="w-16 h-16 mx-auto mb-3" />
+                <p class="font-bold">Tidak ada pesanan PO / Draft saat ini.</p>
+            </div>
+        @endforelse
+    </div>
+
     <div x-show="activeTab === 'paid'" style="display: none;" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" class="p-4 space-y-4">
         @forelse($paidOrders as $order)
-            <div x-data="{ expanded: false }" class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+             <div x-data="{ expanded: false }" class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-700 overflow-hidden">
                 <button @click="expanded = !expanded" class="w-full p-4 flex justify-between items-center text-left hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition">
                     <div>
                         <span class="inline-block px-2 py-1 bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400 text-[10px] font-black uppercase rounded mb-1">LUNAS</span>
@@ -136,12 +151,14 @@
                 </button>
                 <div x-show="expanded" x-collapse>
                     <div class="p-4 border-t border-zinc-100 dark:border-zinc-700">
-                        <a href="/invoice/{{ $order->order_number }}" target="_blank" class="flex-1 flex justify-center items-center gap-1 py-2.5 bg-zinc-100 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-[11px] font-bold rounded-lg hover:bg-zinc-200 transition">
-                            <x-heroicon-o-eye class="w-4 h-4" /> Lihat Nota
-                        </a>
-                        <a href="/invoice/{{ $order->order_number }}/download" class="flex-1 flex justify-center items-center gap-1 py-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[11px] font-bold rounded-lg hover:bg-blue-100 border border-blue-200 dark:border-blue-800 transition">
-                            <x-heroicon-o-arrow-down-tray class="w-4 h-4" /> Download PDF
-                        </a>
+                        <div class="flex gap-2">
+                            <a href="/invoice/{{ $order->order_number }}" target="_blank" class="flex-1 flex justify-center items-center gap-1 py-2.5 bg-zinc-100 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-[11px] font-bold rounded-lg hover:bg-zinc-200 transition">
+                                <x-heroicon-o-eye class="w-4 h-4" /> Lihat Nota
+                            </a>
+                            <a href="/invoice/{{ $order->order_number }}/download" class="flex-1 flex justify-center items-center gap-1 py-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[11px] font-bold rounded-lg hover:bg-blue-100 border border-blue-200 dark:border-blue-800 transition">
+                                <x-heroicon-o-arrow-down-tray class="w-4 h-4" /> Download PDF
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>

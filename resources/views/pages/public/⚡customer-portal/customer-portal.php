@@ -13,6 +13,7 @@ new #[Title('Customer Portal - Cahya Fresh')] class extends Component
     public $business;
     public $unpaidOrders = [];
     public $paidOrders = [];
+    public $draftOrders = []; // <--- TAMBAHAN UNTUK DRAFT/PO
     public $wallets = [];
     public $totalUnpaid = 0;
 
@@ -25,19 +26,25 @@ new #[Title('Customer Portal - Cahya Fresh')] class extends Component
         $this->customer = Customer::with('business')->where('slug', $slug)->firstOrFail();
         $this->business = $this->customer->business;
 
-        // Ambil semua pesanan milik pelanggan ini beserta detail dan pengirimannya
-        $orders = Order::with(['orderItems.product', 'delivery'])
+        // Ambil SEMUA pesanan (tanpa filter status dulu)
+        $allOrders = Order::with(['orderItems.product', 'delivery'])
             ->where('customer_id', $this->customer->id)
-            ->where('status', 'completed')
             ->orderBy('order_date', 'desc')
             ->get();
 
-        $this->unpaidOrders = $orders->whereIn('payment_status', ['unpaid', 'partial'])->values();
-        $this->paidOrders = $orders->where('payment_status', 'paid')->values();
+        // Pisahkan pesanan Draft
+        $this->draftOrders = $allOrders->where('status', 'draft')->values();
+
+        // Pisahkan pesanan Selesai
+        $completedOrders = $allOrders->where('status', 'completed');
+        $this->unpaidOrders = $completedOrders->whereIn('payment_status', ['unpaid', 'partial'])->values();
+        $this->paidOrders = $completedOrders->where('payment_status', 'paid')->values();
+        
         $this->totalUnpaid = $this->unpaidOrders->sum('total_amount');
         $this->totalPiutang = $this->unpaidOrders->sum('total_amount');
-        $this->totalDeposit = $this->customer->deposit_balance ?? 0; // Pastikan kolom ini ada di database
-        $this->totalKomisi = $this->customer->commission_balance ?? 0; // Pastikan kolom ini ada di database
+        $this->totalDeposit = $this->customer->deposit_balance ?? 0; 
+        $this->totalKomisi = $this->customer->commission_balance ?? 0; 
+        
         $this->wallets = Wallet::where('business_id', $this->business->id)
             ->where('is_active', true)
             ->where('type', 'bank') 
