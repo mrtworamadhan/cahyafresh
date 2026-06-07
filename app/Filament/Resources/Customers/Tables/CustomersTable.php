@@ -135,7 +135,9 @@ class CustomersTable
                         ]);
 
                         // 2. Potong Saldo Komisi Agen
-                        $record->decrement('commission_balance', $cleanAmount);
+                        $cleanAmount = (float) $cleanAmount;
+                        $record->commission_balance -= $cleanAmount;
+                        $record->save();
 
                         // 3. Potong Saldo Fisik di Dompet Kasir
                         $wallet = \App\Models\Wallet::find($data['wallet_id']);
