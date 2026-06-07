@@ -42,18 +42,23 @@ class InvoiceController extends Controller
     public function download($orderNumber)
     {
         $data = $this->getInvoiceData($orderNumber);
+        
+        // Tambahkan variabel is_pdf ke dalam data
+        $data['is_pdf'] = true; 
+        
         $pdf = Pdf::loadView("public.invoices.{$data['templateName']}", $data);
         $pdf->setPaper('A4', 'portrait');
+        
         return $pdf->download("INVOICE-{$orderNumber}.pdf");
     }
     public function previewBatch($orderNumber)
-{
-    $data = $this->getInvoiceData($orderNumber);
-    // Kita arahkan ke view yang SAMA dengan printBatch, 
-    // TAPI kita kirim variabel penanda biar script window.print() tidak jalan.
-    $data['is_preview'] = true; 
-    return view("public.invoices.batch-dotmatrix", $data);
-}
+    {
+        $data = $this->getInvoiceData($orderNumber);
+        // Kita arahkan ke view yang SAMA dengan printBatch, 
+        // TAPI kita kirim variabel penanda biar script window.print() tidak jalan.
+        $data['is_preview'] = true; 
+        return view("public.invoices.batch-dotmatrix", $data);
+    }
     public function printBatch($orderNumber)
     {
         // Menggunakan helper data yang sudah kita buat sebelumnya

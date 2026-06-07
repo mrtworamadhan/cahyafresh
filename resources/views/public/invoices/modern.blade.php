@@ -48,7 +48,8 @@
         <tr>
             <td width="70%" valign="top">
                 @if($logo)
-                    <img src="{{ asset('storage/' . $logo) }}" style="height: 60px; margin-bottom: 10px;">
+                    <img src="{{ (isset($is_pdf) && $is_pdf) ? public_path('storage/' . $logo) : asset('storage/' . $logo) }}" 
+                        style="height: 60px; margin-bottom: 10px;">
                 @endif
                 <div style="font-size: 22px; color: #444;">
                     <strong>{{ $order->business->name }}</strong><br>
