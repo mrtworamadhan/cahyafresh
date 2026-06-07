@@ -61,7 +61,7 @@ new #[Layout('layouts::pos')] class extends Component
                 $this->cart[$index]['unit_id'] = $unit['id'];
                 $this->cart[$index]['unit_name'] = $unit['unit_name'];
                 // Jika di tabel satuan ada kolom modal per karung, panggil di sini (opsional)
-                // $this->cart[$index]['price'] = $unit['unit_cost_price'] ?? 0; 
+                $this->cart[$index]['price'] = $unit['unit_selling_price'] ?? 0; 
             }
         }
     }

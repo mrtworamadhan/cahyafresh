@@ -122,7 +122,7 @@ new #[Layout('layouts::pos')] class extends Component
                 'qty_bonus' => 0,
                 'commission_per_unit' => 0,
                 'unit_id' => null, 
-                'unit_name' => 'Satuan Dasar',
+                'unit_name' => $product->base_unit ?? 'Satuan',
                 'base_price' => $product->selling_price,
                 'available_units' => $product->units->toArray(),
             ];
@@ -133,7 +133,7 @@ new #[Layout('layouts::pos')] class extends Component
     {
         if (empty($unitId)) {
             $this->cart[$index]['unit_id'] = null;
-            $this->cart[$index]['unit_name'] = 'Satuan Dasar';
+            $this->cart[$index]['unit_name'] = $this->cart[$index]['base_unit'];
             $this->cart[$index]['price'] = $this->cart[$index]['base_price'];
         } else {
             $unit = collect($this->cart[$index]['available_units'])->firstWhere('id', (int)$unitId);
@@ -422,27 +422,7 @@ new #[Layout('layouts::pos')] class extends Component
 
                     // 3. JURNAL & PENGIRIMAN KOMISI
                     if ($this->applyCommission && $this->commissionRecipientId && $this->commission > 0) {
-                        $kategoriKomisi = \App\Models\FinanceCategory::where('code', 'EXP_COMMISSION')->first();
                         
-                        // 1. Catat pengeluaran komisi
-                        Ledger::create([
-                            'business_id' => $businessId,
-                            'wallet_id' => $this->walletId,
-                            'finance_category_id' => $kategoriKomisi?->id,
-                            'transaction_date' => now(),
-                            'description' => "Pencairan Komisi Langsung Nota: {$orderNumber}",
-                            'type' => 'out',
-                            'amount' => (float)$this->commission,
-                            'contact_type' => Customer::class,
-                            'contact_id' => $this->commissionRecipientId,
-                            'reference_type' => Order::class,
-                            'reference_id' => $order->id,
-                        ]);
-
-                        // 2. Potong saldo laci kasir
-                        Wallet::find($this->walletId)?->decrement('balance', (float)$this->commission);
-
-                        // 3. Tambahkan saldo ke Customer
                         $penerimaKomisi = Customer::find($this->commissionRecipientId);
                         if ($penerimaKomisi) {
                             // Pastikan 'balance' adalah nama kolom yang benar di tabel customers lu

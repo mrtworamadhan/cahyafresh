@@ -184,7 +184,7 @@ class OrdersTable
                             ]);
                         }
 
-                        $wallet = \App\Models\Wallet::find($data['wallet_id']);
+                        $wallet = Wallet::find($data['wallet_id']);
                         if ($wallet) {
                             $wallet->increment('balance', $amountPaid);
                         }

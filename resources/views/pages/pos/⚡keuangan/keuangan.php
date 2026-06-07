@@ -148,21 +148,7 @@ new #[Layout('layouts::pos')] class extends Component
             }
 
             if ($order->commission_amount > 0 && $order->commission_recipient_id) {
-                $kategoriKomisi = \App\Models\FinanceCategory::where('code', 'EXP_COMMISSION')->first(); // Pastikan kode ini ada
                 
-                Ledger::create([
-                    'business_id' => $businessId,
-                    'wallet_id' => $this->receivableWalletId, // Asumsi komisi diambil dari dompet yang sama
-                    'finance_category_id' => $kategoriKomisi?->id,
-                    'transaction_date' => now(),
-                    'description' => "Pembayaran Komisi Nota: {$order->order_number} kepada User ID: {$order->commission_recipient_id}",
-                    'type' => 'out', // Ini pengeluaran
-                    'amount' => $order->commission_amount,
-                    'contact_type' => \App\Models\Customer::class,
-                    'contact_id' => $order->commission_recipient_id,
-                    'reference_type' => Order::class,
-                    'reference_id' => $order->id,
-                ]);
 
                 $penerimaKomisi = \App\Models\Customer::find($order->commission_recipient_id);
                 if ($penerimaKomisi) {
