@@ -25,7 +25,8 @@ class OrdersTable
         return $table
             ->columns([
                 TextColumn::make('order_number')->label('No. Pesanan')->searchable(),
-                TextColumn::make('order_date')->label('Tanggal')->date('d M Y')->sortable(),
+                TextColumn::make('order_date')->label('Tanggal')->date('d M')->sortable(),
+                TextColumn::make('delivery_date')->label('Tanggal')->date('d M')->sortable(),
                 TextColumn::make('customer.name')->label('Pelanggan')->searchable(),
                 TextColumn::make('total_amount')->label('Total')->money('IDR')->sortable(),
                 TextColumn::make('remaining_balance')
@@ -51,11 +52,11 @@ class OrdersTable
                         'paid' => 'success',
                     }),
             ])
-            ->defaultSort('order_date', 'desc')
+            ->defaultSort('delivery_date', 'desc')
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()->label(''),
                 Action::make('share_wa')
-                    ->label('Kirim WA')
+                    ->label('WA')
                     ->icon('heroicon-o-chat-bubble-left-ellipsis')
                     ->color('success')
                     ->action(function ($record) {
@@ -84,19 +85,19 @@ class OrdersTable
                     })
                     ->visible(fn ($record) => !empty($record->customer->phone)),
                 Action::make('download_pdf')
-                    ->label('Unduh PDF')
+                    ->label('PDF')
                     ->icon('heroicon-o-arrow-down-tray')
                     ->color('danger') // Warna merah khas PDF
                     ->url(fn ($record) => url('/invoice/' . $record->order_number . '/download'))
                     ->openUrlInNewTab(),
                 Action::make('print_batch')
-                    ->label('Cetak SJ & Inv')
+                    ->label('Cetak')
                     ->icon('heroicon-o-printer')
                     ->color('success')
                     ->url(fn ($record) => route('invoice.print-batch', $record->order_number))
                     ->openUrlInNewTab(),
                 Action::make('preview_batch')
-                    ->label('Preview SJ & Inv')
+                    ->label('')
                     ->icon('heroicon-o-eye')
                     ->color('gray')
                     ->url(fn ($record) => route('invoice.preview-batch', $record->order_number))
