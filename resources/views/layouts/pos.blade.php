@@ -8,14 +8,15 @@
     <title>{{ $title ?? 'Super POS - Smart Supply' }}</title>
 
     <meta name="description" content="{{ $description ?? 'Aplikasi kasir cerdas (POS) untuk manajemen penjualan, stok, dan pencatatan keuangan bisnis secara real-time.' }}">
-    <meta name="keywords" content="Aplikasi Kasir, Point of Sales, POS, Manajemen Bisnis, Invoice Online, Pencatatan Keuangan, Super POS">
-    <meta name="author" content="Super POS">
+    <meta name="keywords" content="Aplikasi Kasir, Point of Sales, POS, Manajemen Bisnis, Portal Pelanggan, Pencatatan Keuangan, Super POS">
+    <meta name="author" content="{{ isset($business) ? $business->name : 'Super POS' }}">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="{{ url()->current() }}">
 
     <link rel="icon" type="image/png" href="{{ asset('images/brand/icon-colour.png') }}">
     <link rel="manifest" href="{{ asset('site.webmanifest') }}">
-    <meta name="theme-color" content="{{ $color ?? '#16a34a' }}"> <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="{{ $color ?? '#16a34a' }}"> 
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Super POS">
@@ -23,15 +24,28 @@
 
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ url()->current() }}">
-    <meta property="og:title" content="{{ $title ?? 'Invoice Tagihan - Super POS' }}">
-    <meta property="og:description" content="{{ $description ?? 'Klik tautan ini untuk melihat detail tagihan dan informasi pembayaran transaksi Anda.' }}">
-    <meta property="og:image" content="{{ asset('images/brand/icon-colour.png') }}">
-    <meta property="og:site_name" content="Super POS">
+    <meta property="og:title" content="{{ $title ?? (isset($business) ? 'Portal Pelanggan - ' . $business->name : 'Portal Pelanggan - Super POS') }}">
+    <meta property="og:description" content="{{ $description ?? 'Klik tautan ini untuk melihat detail tagihan dan informasi riwayat transaksi Anda.' }}">
+    
+    @if(isset($business) && $business->logo)
+        <meta property="og:image" itemprop="image" content="{{ asset('storage/' . $business->logo) }}">
+        <meta property="og:image:secure_url" content="{{ asset('storage/' . $business->logo) }}">
+    @else
+        <meta property="og:image" itemprop="image" content="{{ asset('images/brand/icon-colour.png') }}">
+        <meta property="og:image:secure_url" content="{{ asset('images/brand/icon-colour.png') }}">
+    @endif
+    
+    <meta property="og:site_name" content="{{ isset($business) ? $business->name : 'Super POS' }}">
 
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="{{ $title ?? 'Invoice Tagihan - Super POS' }}">
-    <meta name="twitter:description" content="{{ $description ?? 'Klik tautan ini untuk melihat detail tagihan dan informasi pembayaran transaksi Anda.' }}">
-    <meta name="twitter:image" content="{{ asset('images/brand/icon-colour.png') }}">
+    <meta name="twitter:title" content="{{ $title ?? (isset($business) ? 'Portal Pelanggan - ' . $business->name : 'Portal Pelanggan - Super POS') }}">
+    <meta name="twitter:description" content="{{ $description ?? 'Klik tautan ini untuk melihat detail tagihan dan informasi riwayat transaksi Anda.' }}">
+    
+    @if(isset($business) && $business->logo)
+        <meta name="twitter:image" content="{{ asset('storage/' . $business->logo) }}">
+    @else
+        <meta name="twitter:image" content="{{ asset('images/brand/icon-colour.png') }}">
+    @endif
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles

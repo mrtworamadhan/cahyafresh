@@ -26,7 +26,6 @@ class InvoiceController extends Controller
             ->where('is_active', true)
             ->get();
 
-        // Pass data ke view
         return compact('order', 'templateName', 'color', 'logo', 'show_discount', 'accounts');
     }
 

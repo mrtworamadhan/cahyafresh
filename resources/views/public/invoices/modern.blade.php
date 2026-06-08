@@ -6,7 +6,8 @@
     
     <title>Invoice #{{ $order->order_number }} - {{ $order->business->name }}</title>
 
-    <meta name="robots" content="noindex, nofollow">
+    <!-- Ubah robots menjadi noindex saja agar Google tidak mengindeks, tapi bot WA masih bisa lewat -->
+    <meta name="robots" content="noindex">
     <meta name="description" content="Tagihan resmi dari {{ $order->business->name }} untuk pesanan #{{ $order->order_number }}.">
 
     <link rel="icon" type="image/png" href="{{ asset('images/brand/icon-colour.png') }}">
@@ -18,17 +19,27 @@
     <meta property="og:title" content="Invoice #{{ $order->order_number }} - {{ $order->business->name }}">
     <meta property="og:description" content="Total Tagihan: Rp {{ number_format($order->total_amount, 0, ',', '.') }} | Status: {{ $order->payment_status === 'paid' ? 'LUNAS' : 'BELUM LUNAS' }}.">
     
+    <!-- Perbaikan OG Image agar lebih ramah WhatsApp -->
     @if(isset($logo) && $logo)
-        <meta property="og:image" content="{{ asset('storage/' . $logo) }}">
+        <meta property="og:image" itemprop="image" content="{{ asset('storage/' . $logo) }}">
+        <meta property="og:image:secure_url" content="{{ asset('storage/' . $logo) }}">
     @else
-        <meta property="og:image" content="{{ asset('images/brand/icon-colour.png') }}">
+        <meta property="og:image" itemprop="image" content="{{ asset('images/brand/icon-colour.png') }}">
+        <meta property="og:image:secure_url" content="{{ asset('images/brand/icon-colour.png') }}">
     @endif
     
     <meta property="og:site_name" content="{{ $order->business->name }}">
 
+    <!-- Perbaikan Twitter Image agar ikut dinamis -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Invoice #{{ $order->order_number }}">
     <meta name="twitter:description" content="Tagihan dari {{ $order->business->name }}. Total: Rp {{ number_format($order->total_amount, 0, ',', '.') }}">
+    @if(isset($logo) && $logo)
+        <meta name="twitter:image" content="{{ asset('storage/' . $logo) }}">
+    @else
+        <meta name="twitter:image" content="{{ asset('images/brand/icon-colour.png') }}">
+    @endif
+
     <style>
         body { font-family: Helvetica, Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.4; margin: 0; padding: 20px; }
         .header-table { width: 100%; border-bottom: 3px solid {{ $color }}; padding-bottom: 20px; margin-bottom: 20px; }
