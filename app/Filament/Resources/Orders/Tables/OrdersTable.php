@@ -25,8 +25,8 @@ class OrdersTable
         return $table
             ->columns([
                 TextColumn::make('order_number')->label('No. Pesanan')->searchable(),
-                TextColumn::make('order_date')->label('Tanggal')->date('d M')->sortable(),
-                TextColumn::make('delivery_date')->label('Tanggal')->date('d M')->sortable(),
+                TextColumn::make('order_date')->label('Order')->date('d M')->sortable(),
+                TextColumn::make('delivery_date')->label('Kirim')->date('d M')->sortable(),
                 TextColumn::make('customer.name')->label('Pelanggan')->searchable(),
                 TextColumn::make('total_amount')->label('Total')->money('IDR')->sortable(),
                 TextColumn::make('remaining_balance')
