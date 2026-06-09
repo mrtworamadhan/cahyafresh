@@ -468,7 +468,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         foreach ($piutangQuery as $order) {
             if ($order->remaining_balance > 0) { 
                 $piutangList[] = [
-                    'date' => \Carbon\Carbon::parse($order->created_at)->format('d M Y'), 
+                    'date' => \Carbon\Carbon::parse($order->delivery_date)->format('d M Y'), 
                     'order_number' => $order->order_number, 
                     'customer' => $order->customer->name ?? 'Umum', 
                     'remaining_balance' => (float) $order->remaining_balance
