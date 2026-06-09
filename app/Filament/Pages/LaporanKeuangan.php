@@ -456,9 +456,15 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         }
 
         // --- C. PIUTANG & HUTANG ---
-        $piutangQuery = Order::with('customer')->where('business_id', $businessId)->whereIn('payment_status', ['unpaid', 'partial'])->get();
+        $piutangQuery = Order::with('customer')
+            ->where('business_id', $businessId)
+            ->where('status', 'completed') // <--- GEMBOK UTAMA DI SINI BRO!
+            ->whereIn('payment_status', ['unpaid', 'partial'])
+            ->get();
+
         $piutangList = [];
         $totalPiutang = 0;
+
         foreach ($piutangQuery as $order) {
             if ($order->remaining_balance > 0) { 
                 $piutangList[] = [
