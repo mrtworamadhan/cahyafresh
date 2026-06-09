@@ -7,9 +7,11 @@
             <div class="flex justify-between items-center gap-4">
                 <div>
                     <h1 class="text-2xl font-black tracking-tight uppercase">{{ $business->name ?? 'SMART SUPPLY' }}</h1>             
-                    <p class="text-white/80 text-xs sm:text-sm mt-0.5">Portal Tagihan & Riwayat Transaksi</p>  
-                    <p class="text-[3px] font-italic tracking-wide text-white dark:text-white leading-normal mt-1">
+                    <p class="text-white/80 text-sm sm:text-sm mt-0.5">Portal Tagihan & Riwayat Transaksi</p>  
+                    <p class="text-xs font-italic text-white dark:text-white mt-1">
                         this app powered by 
+                    </p>  
+                    <p class="text-xs font-italic text-white dark:text-white mt-1">
                         <a href="https://salakatech.com" target="_blank" 
                         class="text-zinc-200 dark:text-zinc-200 font-black hover:underline inline-flex items-center gap-0.5 transition whitespace-nowrap">
                             Cahya Salaka Tech
