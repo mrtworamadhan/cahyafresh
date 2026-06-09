@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Wallets\Tables;
 
 use App\Models\Ledger;
 use App\Models\Wallet;
+use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -15,6 +16,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Table;
 use Filament\Support\RawJs;
+use Illuminate\Support\Facades\DB;
 
 class WalletsTable
 {
@@ -41,7 +43,82 @@ class WalletsTable
             ])
             ->recordActions([
                 EditAction::make(),
-                
+                Action::make('transfer_saldo')
+                    ->label('Transfer Saldo')
+                    ->icon('heroicon-o-arrows-right-left')
+                    ->color('info')
+                    ->form(function (Wallet $record) {
+                        return [
+                            Select::make('target_wallet_id')
+                                ->label('Ke Rekening / Dompet Tujuan')
+                                ->options(Wallet::where('business_id', $record->business_id)
+                                    ->where('id', '!=', $record->id)
+                                    ->pluck('name', 'id'))
+                                ->searchable()
+                                ->required(),
+                                
+                            TextInput::make('amount')
+                                ->label('Nominal Transfer')
+                                ->prefix('Rp')
+                                ->required()
+                                ->mask(RawJs::make('$money($input, \',\', \'.\', 2)')),
+                                
+                            TextInput::make('notes')
+                                ->label('Keterangan')
+                                ->default('Mutasi antar rekening')
+                                ->required(),
+                        ];
+                    })
+                    ->action(function (Wallet $record, array $data) {
+                        $cleanAmount = (float) str_replace(['.', ','], ['', '.'], $data['amount']);
+
+                        if ($cleanAmount > $record->balance) {
+                            Notification::make()
+                                ->title('Transfer Gagal!')
+                                ->body('Saldo di ' . $record->name . ' tidak mencukupi untuk transfer ini.')
+                                ->danger()
+                                ->send();
+                            return;
+                        }
+
+                        $targetWallet = Wallet::find($data['target_wallet_id']);
+                        if (!$targetWallet) {
+                            Notification::make()->title('Rekening tujuan tidak valid!')->danger()->send();
+                            return;
+                        }
+
+                        DB::transaction(function () use ($record, $targetWallet, $cleanAmount, $data) {
+                            
+                            Ledger::create([
+                                'business_id' => $record->business_id,
+                                'wallet_id' => $record->id,
+                                'finance_category_id' => null, 
+                                'transaction_date' => now(),
+                                'description' => 'Transfer keluar ke ' . $targetWallet->name . ' (' . $data['notes'] . ')',
+                                'type' => 'out', 
+                                'amount' => $cleanAmount,
+                            ]);
+                            $record->decrement('balance', $cleanAmount);
+
+                            Ledger::create([
+                                'business_id' => $targetWallet->business_id,
+                                'wallet_id' => $targetWallet->id,
+                                'finance_category_id' => null, 
+                                'transaction_date' => now(),
+                                'description' => 'Transfer masuk dari ' . $record->name . ' (' . $data['notes'] . ')',
+                                'type' => 'in', 
+                                'amount' => $cleanAmount,
+                            ]);
+                            $targetWallet->increment('balance', $cleanAmount);
+                            
+                        });
+
+                        Notification::make()
+                            ->title('Transfer Berhasil!')
+                            ->body('Saldo berhasil dipindahkan ke ' . $targetWallet->name)
+                            ->success()
+                            ->send();
+                    }),
                 Action::make('suntik_modal')
                     ->label('Suntik Modal')
                     ->icon('heroicon-o-arrow-down-tray')
@@ -49,7 +126,6 @@ class WalletsTable
                     ->form([
                         TextInput::make('amount')
                             ->label('Nominal Modal Masuk')
-                            // ->numeric() // <--- BAGIAN INI KITA HAPUS
                             ->prefix('Rp')
                             ->required()
                             ->mask(RawJs::make('$money($input, \',\', \'.\', 2)')),
@@ -59,7 +135,6 @@ class WalletsTable
                             ->required(),
                     ])
                     ->action(function (Wallet $record, array $data) {
-                        // Sistem membersihkan titik/koma di sini
                         $cleanAmount = (float) str_replace(['.', ','], ['', '.'], $data['amount']);
 
                         $kategoriModal = \App\Models\FinanceCategory::where('code', 'EQ_MODAL')->first();
@@ -67,7 +142,7 @@ class WalletsTable
                         Ledger::create([
                             'business_id' => $record->business_id,
                             'wallet_id' => $record->id,
-                            'finance_category_id' => $kategoriModal?->id, // <--- TAMBAHKAN INI
+                            'finance_category_id' => $kategoriModal?->id,
                             'transaction_date' => now(),
                             'description' => 'Modal Eksekutif: ' . $data['notes'],
                             'type' => 'in', 
@@ -86,7 +161,6 @@ class WalletsTable
                     ->form([
                         TextInput::make('amount')
                             ->label('Nominal Penarikan')
-                            // ->numeric() // <--- BAGIAN INI JUGA KITA HAPUS
                             ->prefix('Rp')
                             ->required()
                             ->mask(RawJs::make('$money($input, \',\', \'.\', 2)')),
@@ -112,7 +186,7 @@ class WalletsTable
                         Ledger::create([
                             'business_id' => $record->business_id,
                             'wallet_id' => $record->id,
-                            'finance_category_id' => $kategoriPrive?->id, // <--- TAMBAHKAN INI
+                            'finance_category_id' => $kategoriPrive?->id, 
                             'transaction_date' => now(),
                             'description' => 'Prive Eksekutif: ' . $data['notes'],
                             'type' => 'out', 

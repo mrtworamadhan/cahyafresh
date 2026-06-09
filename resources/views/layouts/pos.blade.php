@@ -4,6 +4,16 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    @php
+        $portalBusiness = null;
+        if (request()->segment(1) == 'portal' && request()->segment(2)) {
+            $customerSlug = request()->segment(2);
+            $customerData = \App\Models\Customer::with('business')->where('slug', $customerSlug)->first();
+            if ($customerData) {
+                $portalBusiness = $customerData->business;
+            }
+        }
+    @endphp
 
     <title>{{ $title ?? 'Super POS - Smart Supply' }}</title>
 
@@ -52,8 +62,14 @@
 
     <style> 
         [x-cloak] { display: none !important; } 
-        body::-webkit-scrollbar { display: none; }
-        body { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        *::-webkit-scrollbar { 
+            display: none !important; 
+        }
+        * { 
+            -ms-overflow-style: none !important; 
+            scrollbar-width: none !important; 
+        }
     </style>
 
     @if(config('services.ga.measurement_id') || env('GA_MEASUREMENT_ID'))
@@ -116,7 +132,7 @@
         }
     </style>
 </head>
-<body class="bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-white font-sans h-screen overflow-hidden" 
+<body class="bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-white font-sans min-h-screen md:h-screen md:overflow-hidden" 
       x-data="{ 
           sidebarOpen: false, 
           isCollapsed: localStorage.getItem('pos-sidebar-collapsed') === 'true' 
@@ -130,7 +146,7 @@
         </button>
     </div>
 
-    <div class="flex h-full md:h-screen overflow-hidden relative">
+    <div class="flex min-h-[calc(100vh-61px)] md:min-h-0 md:h-screen overflow-x-hidden md:overflow-hidden relative">
         
         <aside :class="{
                   'translate-x-0': sidebarOpen,
@@ -190,14 +206,12 @@
                     <x-heroicon-o-arrow-left-on-rectangle class="w-5 h-5 shrink-0" />
                     <span x-show="!isCollapsed" class="text-sm font-bold whitespace-nowrap">Keluar ke Admin</span>
                 </a>
-
-
             </div>
         </aside>
 
         <div x-show="sidebarOpen" @click="sidebarOpen = false" class="fixed inset-0 z-40 bg-black/50 md:hidden" x-transition.opacity></div>
 
-        <main class="flex-1 h-full overflow-hidden flex flex-col bg-zinc-100 dark:bg-zinc-950 relative transition-all duration-300">
+        <main class="flex-1 min-h-0 flex flex-col bg-zinc-100 dark:bg-zinc-950 relative transition-all duration-300 overflow-y-auto md:overflow-y-hidden">
             {{ $slot }}
         </main>
     </div>

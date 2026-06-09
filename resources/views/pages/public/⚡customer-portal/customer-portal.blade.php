@@ -1,193 +1,290 @@
-<div class="min-h-screen bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 pb-72 font-sans" x-data="{ activeTab: 'unpaid' }">
+<div class="min-h-screen bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 font-sans flex flex-col relative" x-data="{ activeTab: 'unpaid', showCommissionModal: false }">          
     
-    <div class="bg-blue-600 dark:bg-blue-800 text-white p-6 rounded-b-3xl shadow-lg relative overflow-hidden">
-        <div class="relative z-10">
-            <h1 class="text-2xl font-black">{{ $business->name ?? 'SMART SUPPLY' }}</h1>
-            <p class="text-blue-100 text-sm mt-1">Portal Tagihan & Riwayat Transaksi</p>
+    <div class="text-white p-6 rounded-b-3xl shadow-lg relative overflow-hidden shrink-0" 
+         style="background-color: {{ $business->theme_color ?? '#2563eb' }};">
+        
+        <div class="relative z-10">             
+            <div class="flex justify-between items-center gap-4">
+                <div>
+                    <h1 class="text-2xl font-black tracking-tight uppercase">{{ $business->name ?? 'SMART SUPPLY' }}</h1>             
+                    <p class="text-white/80 text-xs sm:text-sm mt-0.5">Portal Tagihan & Riwayat Transaksi</p>                          
+                </div>
+
+                @if(isset($business) && $business->logo)
+                    <img src="{{ asset('storage/' . $business->logo) }}" alt="Logo {{ $business->name }}" 
+                         class="w-14 h-14 rounded-full object-contain border-2 border-white/30 shadow-md shrink-0 bg-white">
+                @else
+                    <div class="w-14 h-14 rounded-full bg-white/20 border-2 border-white/30 flex items-center justify-center shrink-0 shadow-md">
+                        <x-heroicon-o-building-storefront class="w-7 h-7 text-white" />
+                    </div>
+                @endif
+            </div>
             
-            <div class="mt-6 bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/20">
-                <p class="text-xs text-blue-100 uppercase tracking-wider font-bold mb-1">Halo,</p>
-                <h2 class="text-xl font-black">{{ $customer->name }}</h2>
-                <p class="text-sm font-medium opacity-80">{{ $customer->phone ?? '-' }}</p>
-            </div>
-            <div class="mt-6 grid grid-cols-3 gap-3">
-                <div class="bg-white/10 p-3 rounded-xl backdrop-blur-sm border border-white/20 text-center">
-                    <p class="text-[10px] text-blue-100 uppercase font-bold mb-1">Piutang</p>
-                    <p class="text-sm font-black text-rose-300">Rp {{ number_format($totalPiutang, 0, ',', '.') }}</p>
-                </div>
-                <div class="bg-white/10 p-3 rounded-xl backdrop-blur-sm border border-white/20 text-center">
-                    <p class="text-[10px] text-blue-100 uppercase font-bold mb-1">Deposit</p>
-                    <p class="text-sm font-black text-green-300">Rp {{ number_format($totalDeposit, 0, ',', '.') }}</p>
-                </div>
-                <div class="bg-white/10 p-3 rounded-xl backdrop-blur-sm border border-white/20 text-center">
-                    <p class="text-[10px] text-blue-100 uppercase font-bold mb-1">Komisi</p>
-                    <p class="text-sm font-black text-amber-300">Rp {{ number_format($totalKomisi, 0, ',', '.') }}</p>
-                </div>
-            </div>
+            <div class="mt-6 bg-white/10 p-4 rounded-2xl backdrop-blur-sm border border-white/20">                 
+                <p class="text-xs text-white/70 uppercase tracking-wider font-bold mb-1">Halo,</p>                 
+                <h2 class="text-xl font-black">{{ $customer->name }}</h2>                 
+                <p class="text-sm font-medium opacity-80">{{ $customer->phone ?? '-' }}</p>             
+            </div>             
+            
+            <div class="mt-6 grid grid-cols-3 gap-3">                 
+                <div class="bg-white/10 p-3 rounded-xl backdrop-blur-sm border border-white/20 text-center">                     
+                    <p class="text-[10px] text-white/80 uppercase font-bold mb-1">Piutang</p>                     
+                    <p class="text-sm font-black text-rose-200">Rp {{ number_format($totalPiutang, 0, ',', '.') }}</p>                 
+                </div>                 
+                <div class="bg-white/10 p-3 rounded-xl backdrop-blur-sm border border-white/20 text-center">                     
+                    <p class="text-[10px] text-white/80 uppercase font-bold mb-1">Deposit</p>                     
+                    <p class="text-sm font-black text-green-200">Rp {{ number_format($totalDeposit, 0, ',', '.') }}</p>                 
+                </div>                 
+                
+                <div @click="showCommissionModal = true" class="bg-white/10 p-3 rounded-xl backdrop-blur-sm border border-white/20 text-center cursor-pointer hover:bg-white/20 hover:scale-105 transition active:scale-95">                     
+                    <p class="text-[10px] text-white/80 uppercase font-bold mb-1 flex items-center justify-center gap-1">
+                        Komisi <x-heroicon-s-information-circle class="w-3 h-3 text-amber-200" />
+                    </p>                     
+                    <p class="text-sm font-black text-amber-200">Rp {{ number_format($totalKomisi, 0, ',', '.') }}</p>                 
+                </div>             
+            </div>         
+        </div>         
+        <div class="absolute -bottom-10 -right-10 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl"></div>     
+    </div>     
+
+    <div class="px-4 mt-6 shrink-0">         
+        <div class="flex p-1 bg-zinc-200 dark:bg-zinc-800 rounded-xl overflow-x-auto gap-1">             
+            <button @click="activeTab = 'unpaid'"                      
+                    :class="activeTab === 'unpaid' ? 'bg-white dark:bg-zinc-700 shadow text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-700'"                     
+                    class="flex-1 whitespace-nowrap py-2 px-3 text-[11px] sm:text-sm font-bold rounded-lg transition-all duration-200">                 
+                Belum Lunas ({{ count($unpaidOrders) }})             
+            </button>             
+            <button @click="activeTab = 'draft'"                      
+                    :class="activeTab === 'draft' ? 'bg-white dark:bg-zinc-700 shadow text-amber-600 dark:text-amber-400' : 'text-zinc-500 hover:text-zinc-700'"                     
+                    class="flex-1 whitespace-nowrap py-2 px-3 text-[11px] sm:text-sm font-bold rounded-lg transition-all duration-200">                 
+                PO / Disiapkan ({{ count($draftOrders) }})             
+            </button>             
+            <button @click="activeTab = 'paid'"                      
+                    :class="activeTab === 'paid' ? 'bg-white dark:bg-zinc-700 shadow text-green-600 dark:text-green-400' : 'text-zinc-500 hover:text-zinc-700'"                     
+                    class="flex-1 whitespace-nowrap py-2 px-3 text-[11px] sm:text-sm font-bold rounded-lg transition-all duration-200">                 
+                Riwayat ({{ count($paidOrders) }})             
+            </button>         
+        </div>     
+    </div>     
+
+    <div class="flex-1 min-h-0">
+        <div x-show="activeTab === 'unpaid'" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" class="p-4 space-y-4">         
+            @forelse($unpaidOrders as $order)             
+                <div x-data="{ expanded: false }" class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-rose-200 dark:border-rose-900/50 overflow-hidden">                 
+                    <button @click="expanded = !expanded" class="w-full p-4 flex justify-between items-center text-left bg-rose-50/50 dark:bg-rose-900/10 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition">                     
+                        <div>                         
+                            <span class="inline-block px-2 py-1 bg-rose-100 dark:bg-rose-900 text-rose-600 dark:text-rose-400 text-[10px] font-black uppercase rounded mb-1">Tagihan Aktif</span>                         
+                            <h3 class="font-bold text-sm">{{ $order->order_number }}</h3>                         
+                            <p class="text-xs text-zinc-500">Estimasi Kirim: {{ $order->delivery_date ? \Carbon\Carbon::parse($order->delivery_date)->format('d M Y') : 'Menunggu Info' }}</p>                     
+                        </div>                     
+                        <div class="text-right flex flex-col items-end gap-1">                         
+                            <span class="text-lg font-black text-rose-600 dark:text-rose-500">Rp {{ number_format($order->total_amount, 0, ',', '.') }}</span>                         
+                            <x-heroicon-o-chevron-down class="w-4 h-4 text-zinc-400 transition-transform duration-300" x-bind:class="expanded ? 'rotate-180' : ''" />                     
+                        </div>                 
+                    </button>                 
+                    <div x-show="expanded" x-collapse>                     
+                        <div class="p-4 border-t border-zinc-100 dark:border-zinc-700">                         
+                            <div class="space-y-2 mb-4">                             
+                                @foreach($order->orderItems as $item)                                 
+                                    <div class="flex justify-between text-xs font-medium">                                     
+                                        <span class="text-zinc-600 dark:text-zinc-400">{{ $item->qty_billed }}x {{ $item->product->name }}</span>                                     
+                                        <span>Rp {{ number_format($item->subtotal, 0, ',', '.') }}</span>                                 
+                                    </div>                             
+                                @endforeach                         
+                            </div>                         
+                            <div class="mt-3 flex gap-2">                             
+                                <a href="/invoice/{{ $order->order_number }}" target="_blank" class="flex-1 flex justify-center items-center gap-1 py-2.5 bg-zinc-100 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-[11px] font-bold rounded-lg hover:bg-zinc-200 transition">                                 
+                                    <x-heroicon-o-eye class="w-4 h-4" /> Lihat Nota                             
+                                </a>                             
+                                <a href="/invoice/{{ $order->order_number }}/download" class="flex-1 flex justify-center items-center gap-1 py-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[11px] font-bold rounded-lg hover:bg-blue-100 border border-blue-200 dark:border-blue-800 transition">                                 
+                                    <x-heroicon-o-arrow-down-tray class="w-4 h-4" /> Download PDF                             
+                                </a>                         
+                            </div>                     
+                        </div>                 
+                    </div>             
+                </div>         
+            @empty             
+                <div class="text-center py-16 opacity-50">                 
+                    <x-heroicon-o-face-smile class="w-16 h-16 mx-auto mb-3" />                 
+                    <p class="font-bold">Luar biasa! Tidak ada tagihan yang tertunggak.</p>             
+                </div>         
+            @endforelse     
+        </div>     
+        
+        <div x-show="activeTab === 'draft'" style="display: none;" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" class="p-4 space-y-4">         
+            @forelse($draftOrders as $order)             
+                <div x-data="{ expanded: false }" class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-amber-200 dark:border-amber-900/50 overflow-hidden">                 
+                    <button @click="expanded = !expanded" class="w-full p-4 flex justify-between items-center text-left bg-amber-50/50 dark:bg-amber-900/10 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition">                     
+                        <div>                         
+                            @if($order->status === 'processing')
+                                <span class="inline-block px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase rounded mb-1">Sedang Dalam Perjalanan</span>
+                            @else
+                                <span class="inline-block px-2 py-1 bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400 text-[10px] font-black uppercase rounded mb-1">Sedang Disiapkan</span>
+                            @endif
+                            <h3 class="font-bold text-sm">{{ $order->order_number }}</h3>                         
+                            <p class="text-xs text-zinc-500">Estimasi Kirim: {{ $order->delivery_date ? \Carbon\Carbon::parse($order->delivery_date)->format('d M Y') : 'Menunggu Info' }}</p>                     
+                        </div>                     
+                        <div class="text-right flex flex-col items-end gap-1">                         
+                            <span class="text-lg font-black text-amber-600 dark:text-amber-500">Rp {{ number_format($order->total_amount, 0, ',', '.') }}</span>                         
+                            <x-heroicon-o-chevron-down class="w-4 h-4 text-zinc-400 transition-transform duration-300" x-bind:class="expanded ? 'rotate-180' : ''" />                     
+                        </div>                 
+                    </button>                 
+                    <div x-show="expanded" x-collapse>                     
+                        <div class="p-4 border-t border-zinc-100 dark:border-zinc-700">                         
+                            <div class="space-y-2 mb-4">                             
+                                @foreach($order->orderItems as $item)                                 
+                                    <div class="flex justify-between text-xs font-medium">                                     
+                                        <span class="text-zinc-600 dark:text-zinc-400">{{ $item->qty_billed }}x {{ $item->product->name }}</span>                                     
+                                        <span>Rp {{ number_format($item->subtotal, 0, ',', '.') }}</span>                                 
+                                    </div>                             
+                                @endforeach                         
+                            </div>                         
+                            
+                            <div class="mt-4 p-3 {{ $order->status === 'processing' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800/50 text-blue-800 dark:text-blue-300' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800/50 text-amber-800 dark:text-amber-300' }} rounded-xl border text-center">                             
+                                <p class="text-xs font-bold">                                 
+                                    {{ $order->status === 'processing' ? 'Pesanan Anda telah dikonfirmasi dan saat ini barang sedang dibawa oleh kurir menuju alamat Anda.' : 'Pesanan ini sedang direkap/disiapkan oleh tim gudang kami dan belum masuk ke tagihan.' }}
+                                </p>                         
+                            </div>                     
+                        </div>                 
+                    </div>             
+                </div>         
+            @empty             
+                <div class="text-center py-16 opacity-50">                 
+                    <x-heroicon-o-clock class="w-16 h-16 mx-auto mb-3" />                 
+                    <p class="font-bold">Tidak ada pesanan PO / Draft saat ini.</p>             
+                </div>         
+            @endforelse     
         </div>
-        <div class="absolute -bottom-10 -right-10 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl"></div>
+
+        <div x-show="activeTab === 'paid'" style="display: none;" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" class="p-4 space-y-4">         
+            @forelse($paidOrders as $order)             
+                <div x-data="{ expanded: false }" class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-700 overflow-hidden">                 
+                    <button @click="expanded = !expanded" class="w-full p-4 flex justify-between items-center text-left hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition">                     
+                        <div>                         
+                            <span class="inline-block px-2 py-1 bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400 text-[10px] font-black uppercase rounded mb-1">LUNAS</span>                         
+                            <h3 class="font-bold text-sm text-zinc-700 dark:text-zinc-300">{{ $order->order_number }}</h3>                         
+                            <p class="text-xs text-zinc-500">Besaran Nota: {{ \Carbon\Carbon::parse($order->order_date)->format('d M Y') }}</p>                     
+                        </div>                     
+                        <div class="text-right flex flex-col items-end gap-1">                         
+                            <span class="text-sm font-bold text-zinc-600 dark:text-zinc-400">Rp {{ number_format($order->total_amount, 0, ',', '.') }}</span>                         
+                            <x-heroicon-o-chevron-down class="w-4 h-4 text-zinc-400 transition-transform duration-300" x-bind:class="expanded ? 'rotate-180' : ''" />                     
+                        </div>                 
+                    </button>                 
+                    <div x-show="expanded" x-collapse>                     
+                        <div class="p-4 border-t border-zinc-100 dark:border-zinc-700">                         
+                            <div class="flex gap-2">                             
+                                <a href="/invoice/{{ $order->order_number }}" target="_blank" class="flex-1 flex justify-center items-center gap-1 py-2.5 bg-zinc-100 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-[11px] font-bold rounded-lg hover:bg-zinc-200 transition">                                 
+                                    <x-heroicon-o-eye class="w-4 h-4" /> Lihat Nota                             
+                                </a>                             
+                                <a href="/invoice/{{ $order->order_number }}/download" class="flex-1 flex justify-center items-center gap-1 py-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[11px] font-bold rounded-lg hover:bg-blue-100 border border-blue-200 dark:border-blue-800 transition">                                 
+                                    <x-heroicon-o-arrow-down-tray class="w-4 h-4" /> Download PDF                             
+                                </a>                         
+                            </div>                     
+                        </div>                 
+                    </div>             
+                </div>         
+            @empty                 
+                <div class="text-center py-16 opacity-50">                 
+                    <x-heroicon-o-archive-box class="w-16 h-16 mx-auto mb-3" />                 
+                    <p class="font-bold">Belum ada riwayat transaksi lunas.</p>             
+                </div>         
+            @endforelse     
+        </div>
     </div>
 
-    <div class="px-4 mt-6">
-        <div class="flex p-1 bg-zinc-200 dark:bg-zinc-800 rounded-xl overflow-x-auto gap-1">
-            <button @click="activeTab = 'unpaid'" 
-                    :class="activeTab === 'unpaid' ? 'bg-white dark:bg-zinc-700 shadow text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-700'"
-                    class="flex-1 whitespace-nowrap py-2 px-3 text-[11px] sm:text-sm font-bold rounded-lg transition-all duration-200">
-                Belum Lunas ({{ count($unpaidOrders) }})
-            </button>
-            <button @click="activeTab = 'draft'" 
-                    :class="activeTab === 'draft' ? 'bg-white dark:bg-zinc-700 shadow text-amber-600 dark:text-amber-400' : 'text-zinc-500 hover:text-zinc-700'"
-                    class="flex-1 whitespace-nowrap py-2 px-3 text-[11px] sm:text-sm font-bold rounded-lg transition-all duration-200">
-                PO / Disiapkan ({{ count($draftOrders) }})
-            </button>
-            <button @click="activeTab = 'paid'" 
-                    :class="activeTab === 'paid' ? 'bg-white dark:bg-zinc-700 shadow text-green-600 dark:text-green-400' : 'text-zinc-500 hover:text-zinc-700'"
-                    class="flex-1 whitespace-nowrap py-2 px-3 text-[11px] sm:text-sm font-bold rounded-lg transition-all duration-200">
-                Riwayat ({{ count($paidOrders) }})
-            </button>
-        </div>
-    </div>
+    <footer class="mt-auto py-8 text-center px-4 shrink-0">
+        <p class="text-[11px] font-bold tracking-wide text-zinc-400 dark:text-zinc-500 leading-normal uppercase">
+            app powered by 
+            <a href="https://salakatech.com" target="_blank" 
+               class="text-blue-500 dark:text-blue-400 font-black hover:underline inline-flex items-center gap-0.5 transition whitespace-nowrap">
+                Cahya Salaka Tech
+            </a> 
+            part of Cahya Triloka Group.
+        </p>
+    </footer>
 
-    <div x-show="activeTab === 'unpaid'" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" class="p-4 space-y-4">
-        @forelse($unpaidOrders as $order)
-            <div x-data="{ expanded: false }" class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-rose-200 dark:border-rose-900/50 overflow-hidden">
-                <button @click="expanded = !expanded" class="w-full p-4 flex justify-between items-center text-left bg-rose-50/50 dark:bg-rose-900/10 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition">
-                    <div>
-                        <span class="inline-block px-2 py-1 bg-rose-100 dark:bg-rose-900 text-rose-600 dark:text-rose-400 text-[10px] font-black uppercase rounded mb-1">Tagihan Aktif</span>
-                        <h3 class="font-bold text-sm">{{ $order->order_number }}</h3>
-                        <p class="text-xs text-zinc-500">{{ \Carbon\Carbon::parse($order->order_date)->format('d M Y') }}</p>
-                    </div>
-                    <div class="text-right flex flex-col items-end gap-1">
-                        <span class="text-lg font-black text-rose-600 dark:text-rose-500">Rp {{ number_format($order->total_amount, 0, ',', '.') }}</span>
-                        <x-heroicon-o-chevron-down class="w-4 h-4 text-zinc-400 transition-transform duration-300" x-bind:class="expanded ? 'rotate-180' : ''" />
-                    </div>
+    @if($totalUnpaid > 0)
+        <div class="h-28 shrink-0"></div>
+    @endif
+
+    <div x-show="showCommissionModal" x-cloak class="fixed inset-0 z-[100] flex items-end justify-center bg-zinc-900/60 backdrop-blur-sm animate-fade-in">
+        <div @click.away="showCommissionModal = false" 
+             class="bg-white dark:bg-zinc-800 w-full max-w-md rounded-t-3xl p-5 shadow-2xl flex flex-col max-h-[80vh] transition-transform transform"
+             x-show="showCommissionModal"
+             x-transition:enter="transition ease-out duration-300 transform"
+             x-transition:enter-start="translate-y-full"
+             x-transition:enter-end="translate-y-0"
+             x-transition:leave="transition ease-in duration-200 transform"
+             x-transition:leave-start="translate-y-0"
+             x-transition:leave-end="translate-y-full">
+            
+            <div class="flex justify-between items-center pb-4 border-b border-zinc-100 dark:border-zinc-700 shrink-0">
+                <div>
+                    <h3 class="text-base font-black text-zinc-800 dark:text-zinc-100">Buku Mutasi Komisi</h3>
+                    <p class="text-xs text-zinc-400">Log transparan klaim masuk dan rilis pencairan dana.</p>
+                </div>
+                <button @click="showCommissionModal = false" class="p-2 bg-zinc-100 dark:bg-zinc-700 rounded-full text-zinc-500 hover:text-red-500 transition">
+                    <x-heroicon-o-x-mark class="w-4 h-4" />
                 </button>
-
-                <div x-show="expanded" x-collapse>
-                    <div class="p-4 border-t border-zinc-100 dark:border-zinc-700">
-                        <div class="space-y-2 mb-4">
-                            @foreach($order->orderItems as $item)
-                                <div class="flex justify-between text-xs font-medium">
-                                    <span class="text-zinc-600 dark:text-zinc-400">{{ $item->qty_billed }}x {{ $item->product->name }}</span>
-                                    <span>Rp {{ number_format($item->subtotal, 0, ',', '.') }}</span>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto py-4 space-y-3 pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                @forelse($commissionHistory as $history)
+                    <div class="p-3 bg-zinc-50 dark:bg-zinc-900/50 rounded-xl border border-zinc-100 dark:border-zinc-700/50 flex justify-between items-center gap-2">
+                        <div class="flex items-start gap-2.5">
+                            @if($history['type'] == 'in')
+                                <div class="p-2 bg-green-50 dark:bg-green-950/50 text-green-600 dark:text-green-400 rounded-lg shrink-0 mt-0.5">
+                                    <x-heroicon-o-arrow-down-left class="w-4 h-4" />
                                 </div>
-                            @endforeach
+                            @else
+                                <div class="p-2 bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 rounded-lg shrink-0 mt-0.5">
+                                    <x-heroicon-o-arrow-up-right class="w-4 h-4" />
+                                </div>
+                            @endif
+
+                            <div>
+                                <p class="text-xs font-bold text-zinc-700 dark:text-zinc-300 leading-tight">{{ $history['title'] }}</p>
+                                <p class="text-[10px] text-zinc-400 mt-0.5">{{ \Carbon\Carbon::parse($history['date'])->format('d M Y, H:i') }}</p>
+                                @if($history['note'])
+                                    <p class="text-[10px] text-zinc-500 dark:text-zinc-400 italic mt-1 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded inline-block">{{ $history['note'] }}</p>
+                                @endif
+                            </div>
                         </div>
                         
-                        <div class="mt-3 flex gap-2">
-                            <a href="/invoice/{{ $order->order_number }}" target="_blank" class="flex-1 flex justify-center items-center gap-1 py-2.5 bg-zinc-100 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-[11px] font-bold rounded-lg hover:bg-zinc-200 transition">
-                                <x-heroicon-o-eye class="w-4 h-4" /> Lihat Nota
-                            </a>
-                            <a href="/invoice/{{ $order->order_number }}/download" class="flex-1 flex justify-center items-center gap-1 py-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[11px] font-bold rounded-lg hover:bg-blue-100 border border-blue-200 dark:border-blue-800 transition">
-                                <x-heroicon-o-arrow-down-tray class="w-4 h-4" /> Download PDF
-                            </a>
+                        <div class="text-right shrink-0">
+                            @if($history['type'] == 'in')
+                                <span class="text-sm font-black text-green-600 dark:text-green-400">+Rp {{ number_format($history['amount'], 0, ',', '.') }}</span>
+                                <p class="text-[9px] font-bold uppercase tracking-wider text-zinc-400 mt-0.5">Terbuku</p>
+                            @else
+                                <span class="text-sm font-black text-rose-600 dark:text-rose-400">-Rp {{ number_format($history['amount'], 0, ',', '.') }}</span>
+                                <p class="text-[9px] font-bold uppercase tracking-wider text-blue-500 mt-0.5">Rilis/Cair</p>
+                            @endif
                         </div>
                     </div>
-                </div>
-            </div>
-        @empty
-            <div class="text-center py-10 opacity-50">
-                <x-heroicon-o-face-smile class="w-16 h-16 mx-auto mb-3" />
-                <p class="font-bold">Luar biasa! Tidak ada tagihan yang tertunggak.</p>
-            </div>
-        @endforelse
-    </div>
-    
-    <div x-show="activeTab === 'draft'" style="display: none;" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" class="p-4 space-y-4">
-        @forelse($draftOrders as $order)
-            <div x-data="{ expanded: false }" class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-amber-200 dark:border-amber-900/50 overflow-hidden">
-                <button @click="expanded = !expanded" class="w-full p-4 flex justify-between items-center text-left bg-amber-50/50 dark:bg-amber-900/10 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition">
-                    <div>
-                        <span class="inline-block px-2 py-1 bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400 text-[10px] font-black uppercase rounded mb-1">Sedang Disiapkan</span>
-                        <h3 class="font-bold text-sm">{{ $order->order_number }}</h3>
-                        <p class="text-xs text-zinc-500">Estimasi Kirim: {{ $order->delivery_date ? \Carbon\Carbon::parse($order->delivery_date)->format('d M Y') : 'Menunggu Info' }}</p>
+                @empty
+                    <div class="text-center py-12 text-zinc-400 opacity-60">
+                        <x-heroicon-o-gift class="w-10 h-10 mx-auto mb-2 opacity-40" />
+                        <p class="text-xs font-bold">Belum ada aktivitas mutasi komisi.</p>
                     </div>
-                    <div class="text-right flex flex-col items-end gap-1">
-                        <span class="text-lg font-black text-amber-600 dark:text-amber-500">Rp {{ number_format($order->total_amount, 0, ',', '.') }}</span>
-                        <x-heroicon-o-chevron-down class="w-4 h-4 text-zinc-400 transition-transform duration-300" x-bind:class="expanded ? 'rotate-180' : ''" />
-                    </div>
-                </button>
-
-                <div x-show="expanded" x-collapse>
-                    <div class="p-4 border-t border-zinc-100 dark:border-zinc-700">
-                        <div class="space-y-2 mb-4">
-                            @foreach($order->orderItems as $item)
-                                <div class="flex justify-between text-xs font-medium">
-                                    <span class="text-zinc-600 dark:text-zinc-400">{{ $item->qty_billed }}x {{ $item->product->name }}</span>
-                                    <span>Rp {{ number_format($item->subtotal, 0, ',', '.') }}</span>
-                                </div>
-                            @endforeach
-                        </div>
-                        
-                        <div class="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800/50 text-center">
-                            <p class="text-xs font-bold text-amber-800 dark:text-amber-300">
-                                Pesanan ini sedang direkap/disiapkan oleh gudang dan belum masuk tagihan.
-                            </p>
-                        </div>
-                    </div>
-                </div>
+                @endforelse
             </div>
-        @empty
-            <div class="text-center py-10 opacity-50">
-                <x-heroicon-o-clock class="w-16 h-16 mx-auto mb-3" />
-                <p class="font-bold">Tidak ada pesanan PO / Draft saat ini.</p>
-            </div>
-        @endforelse
-    </div>
-
-    <div x-show="activeTab === 'paid'" style="display: none;" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" class="p-4 space-y-4">
-        @forelse($paidOrders as $order)
-             <div x-data="{ expanded: false }" class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-700 overflow-hidden">
-                <button @click="expanded = !expanded" class="w-full p-4 flex justify-between items-center text-left hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition">
-                    <div>
-                        <span class="inline-block px-2 py-1 bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400 text-[10px] font-black uppercase rounded mb-1">LUNAS</span>
-                        <h3 class="font-bold text-sm text-zinc-700 dark:text-zinc-300">{{ $order->order_number }}</h3>
-                        <p class="text-xs text-zinc-500">{{ \Carbon\Carbon::parse($order->order_date)->format('d M Y') }}</p>
-                    </div>
-                    <div class="text-right flex flex-col items-end gap-1">
-                        <span class="text-sm font-bold text-zinc-600 dark:text-zinc-400">Rp {{ number_format($order->total_amount, 0, ',', '.') }}</span>
-                        <x-heroicon-o-chevron-down class="w-4 h-4 text-zinc-400 transition-transform duration-300" x-bind:class="expanded ? 'rotate-180' : ''" />
-                    </div>
-                </button>
-                <div x-show="expanded" x-collapse>
-                    <div class="p-4 border-t border-zinc-100 dark:border-zinc-700">
-                        <div class="flex gap-2">
-                            <a href="/invoice/{{ $order->order_number }}" target="_blank" class="flex-1 flex justify-center items-center gap-1 py-2.5 bg-zinc-100 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-[11px] font-bold rounded-lg hover:bg-zinc-200 transition">
-                                <x-heroicon-o-eye class="w-4 h-4" /> Lihat Nota
-                            </a>
-                            <a href="/invoice/{{ $order->order_number }}/download" class="flex-1 flex justify-center items-center gap-1 py-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[11px] font-bold rounded-lg hover:bg-blue-100 border border-blue-200 dark:border-blue-800 transition">
-                                <x-heroicon-o-arrow-down-tray class="w-4 h-4" /> Download PDF
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        @empty
-            <div class="text-center py-10 opacity-50">
-                <x-heroicon-o-archive-box class="w-16 h-16 mx-auto mb-3" />
-                <p class="font-bold">Belum ada riwayat transaksi lunas.</p>
-            </div>
-        @endforelse
+        </div>
     </div>
 
     @if($totalUnpaid > 0)
-        <div x-data="{ showPayment: false }" class="fixed bottom-0 left-0 w-full bg-white dark:bg-zinc-800 border-t border-zinc-200 dark:border-zinc-700 p-4 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] rounded-t-3xl z-50 transition-all duration-300">
+         <div x-data="{ showPayment: false }" class="fixed bottom-0 left-0 w-full bg-white dark:bg-zinc-800 border-t border-zinc-200 dark:border-zinc-700 p-4 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] rounded-t-3xl z-50 transition-all duration-300">
             <div class="max-w-md mx-auto">
-                
                 <div class="flex justify-between items-end mb-2">
                     <div>
                         <p class="text-[10px] uppercase font-bold tracking-wider text-rose-500 mb-1">Total Menunggu Pembayaran</p>
                         <h2 class="text-3xl font-black text-rose-600 dark:text-rose-500">Rp {{ number_format($totalUnpaid, 0, ',', '.') }}</h2>
                     </div>
-                    
                     <button @click="showPayment = !showPayment" class="flex items-center gap-1 text-xs font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 px-3 py-2 rounded-xl transition hover:bg-blue-100">
                         <span x-text="showPayment ? 'Tutup' : 'Cara Bayar'"></span>
                         <x-heroicon-o-chevron-up class="w-4 h-4 transition-transform duration-300" x-bind:class="showPayment ? 'rotate-180' : ''" />
                     </button>
                 </div>
-
                 <div x-show="showPayment" x-collapse class="pt-3 border-t border-zinc-100 dark:border-zinc-700 mt-2">
-                    
                     @if(count($wallets) > 0)
                         <div class="mb-4 p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700">
                             <p class="text-xs font-bold text-zinc-500 mb-2">Instruksi Transfer ke Rekening:</p>
@@ -209,21 +306,16 @@
                             </div>
                         </div>
                     @endif
-
                     @php
                         $waNumber = $business->phone ?? '';
                         if (str_starts_with($waNumber, '0')) {
                             $waNumber = '62' . substr($waNumber, 1);
                         }
                     @endphp
-
                     <a href="https://wa.me/{{ $waNumber }}?text={{ urlencode('Halo Admin ' . $business->name . ', saya ingin konfirmasi pembayaran untuk tagihan atas nama ' . $customer->name) }}" target="_blank" class="w-full bg-green-500 hover:bg-green-600 text-white font-black py-3.5 rounded-xl shadow-md shadow-green-500/20 flex justify-center items-center gap-2 transition text-sm mt-3">
                         <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
                         Konfirmasi Pembayaran via WhatsApp
                     </a>
-                </div>
-
-            </div>
-        </div>
+         </div>
     @endif
 </div>

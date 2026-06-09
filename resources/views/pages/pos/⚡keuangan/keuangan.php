@@ -15,35 +15,29 @@ new #[Layout('layouts::pos')] class extends Component
     public $expenseWalletId = '';
     public string $expenseNote = '';
 
-    // --- STATE PELUNASAN PIUTANG (DARI KONSUMEN) ---
     public $receivableOrderId = '';
     public $receivableAmount = 0;
     public $receivableWalletId = '';
 
-    // --- STATE PELUNASAN HUTANG (KE SUPPLIER) ---
     public $payablePurchaseId = '';
     public $payableAmount = 0;
     public $payableWalletId = '';
 
-    // Modal Sukses Umum
     public bool $showSuccessModal = false;
     public string $successMessage = '';
 
     public $expenseCategoryId = '';
 
-    // Auto-fill nominal piutang saat nota dipilih
     public function updatedReceivableOrderId($value)
     {
         if ($value) {
             $order = Order::find($value);
-            // Asumsi: Pelunasan dilakukan full sesuai total nota. Jika ada sistem cicilan, logic bisa disesuaikan nanti.
             $this->receivableAmount = $order ? $order->total_amount : 0;
         } else {
             $this->receivableAmount = 0;
         }
     }
 
-    // Auto-fill nominal hutang saat nota dipilih
     public function updatedPayablePurchaseId($value)
     {
         if ($value) {
@@ -54,13 +48,12 @@ new #[Layout('layouts::pos')] class extends Component
         }
     }
 
-    // 1. FUNGSI CATAT PENGELUARAN
     public function submitExpense()
     {
         $this->validate([
             'expenseAmount' => 'required|numeric|min:1',
             'expenseWalletId' => 'required',
-            'expenseCategoryId' => 'required', // <--- WAJIB DIPILIH
+            'expenseCategoryId' => 'required',
             'expenseNote' => 'required|string|max:255',
         ]);
 
@@ -70,7 +63,7 @@ new #[Layout('layouts::pos')] class extends Component
             Ledger::create([
                 'business_id' => $businessId,
                 'wallet_id' => $this->expenseWalletId,
-                'finance_category_id' => $this->expenseCategoryId, // <--- MASUKKAN KE SINI
+                'finance_category_id' => $this->expenseCategoryId, 
                 'transaction_date' => now(),
                 'description' => "Biaya Operasional: " . $this->expenseNote,
                 'type' => 'out',
@@ -85,7 +78,6 @@ new #[Layout('layouts::pos')] class extends Component
         $this->showSuccessModal = true;
     }
 
-    // 2. FUNGSI CATAT PELUNASAN PIUTANG (UANG MASUK)
     public function submitReceivable()
     {
         $this->validate([
@@ -103,21 +95,17 @@ new #[Layout('layouts::pos')] class extends Component
             $kategoriPenjualan = \App\Models\FinanceCategory::where('code', 'INC_AR')->first(); // AR = Piutang Barang
             $kategoriOngkir = \App\Models\FinanceCategory::where('code', 'INC_SHIPPING')->first();
 
-            // Hitung berapa ongkir yang SUDAH dibayar di cicilan sebelumnya
             $ongkirSudahDibayar = Ledger::where('reference_type', Order::class)
                 ->where('reference_id', $order->id)
                 ->where('finance_category_id', $kategoriOngkir?->id)
                 ->sum('amount');
 
-            // Hitung sisa ongkir yang belum dibayar
             $sisaTagihanOngkir = max(0, (float)$order->shipping_fee_billed - $ongkirSudahDibayar);
             
-            // Alokasi uang cicilan/pelunasan ini
             $uangMasuk = (float)$this->receivableAmount;
             $ongkirDibayar = min($uangMasuk, $sisaTagihanOngkir);
             $barangDibayar = $uangMasuk - $ongkirDibayar;
 
-            // 1. Jurnal Pelunasan Piutang Barang
             if ($barangDibayar > 0) {
                 Ledger::create([
                     'business_id' => $businessId,
@@ -132,7 +120,6 @@ new #[Layout('layouts::pos')] class extends Component
                 ]);
             }
 
-            // 2. Jurnal Pelunasan Ongkir (Jika masih ada sisa ongkir)
             if ($ongkirDibayar > 0) {
                 Ledger::create([
                     'business_id' => $businessId,
@@ -158,7 +145,6 @@ new #[Layout('layouts::pos')] class extends Component
 
             Wallet::find($this->receivableWalletId)?->increment('balance', $uangMasuk);
             
-            // Ubah status nota menjadi lunas
             $order->update(['status' => 'completed']);
             $order->update(['payment_status' => 'paid']);
         });
@@ -168,7 +154,6 @@ new #[Layout('layouts::pos')] class extends Component
         $this->showSuccessModal = true;
     }
 
-    // 3. FUNGSI CATAT PELUNASAN HUTANG (UANG KELUAR)
     public function submitPayable()
     {
         $this->validate([
@@ -197,7 +182,6 @@ new #[Layout('layouts::pos')] class extends Component
 
             Wallet::find($this->payableWalletId)?->decrement('balance', (float)$this->payableAmount);
             
-            // Ubah status nota menjadi lunas
             $purchase->update(['status' => 'paid']);
         });
 
@@ -218,19 +202,15 @@ new #[Layout('layouts::pos')] class extends Component
         
         $today = now()->toDateString();
 
-        // 1. Hitung Total Omzet Penjualan Hari Ini (Dari Order yang Selesai)
         $todaySales = Order::where('business_id', $businessId)
             ->whereDate('order_date', $today)
             ->where('status', 'completed')
             ->sum('total_amount');
 
-        // 2. Hitung Total Pengeluaran Hari Ini (Dari Ledger Uang Keluar Operasional)
         $todayExpenses = Ledger::where('business_id', $businessId)
             ->whereDate('transaction_date', $today)
             ->where('type', 'out')
             ->whereHas('financeCategory', function($query) {
-                // Hanya hitung jika tipe COA-nya adalah 'out' (expense)
-                // Mengabaikan 'equity' seperti Prive atau Komisi Referral
                 $query->where('type', 'out');
             })
             ->sum('amount');

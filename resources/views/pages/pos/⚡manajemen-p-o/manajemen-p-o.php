@@ -9,18 +9,23 @@ use Illuminate\Support\Facades\DB;
 
 new #[Layout('layouts::pos')] class extends Component
 {
-    // State Modal Sukses
     public bool $showSuccessModal = false;
     public string $successMessage = '';
 
-    // ==========================================
-    // STATE & FUNGSI MODAL BATAL (CANCEL)
-    // ==========================================
     public bool $showCancelModal = false;
     public ?int $cancelOrderId = null;
     public string $cancelOrderNumber = '';
     public $cancelOrderAmount = 0;
     public string $cancelPaymentStatus = '';
+
+    // PERBAIKAN UTAMA: Properti penampung tanggal yang dipilih
+    public ?string $selectedDate = null;
+
+    public function mount()
+    {
+        // Set default awal ke hari ini saat komponen pertama kali dibuka
+        $this->selectedDate = now()->format('Y-m-d');
+    }
 
     public function openCancelModal($orderId)
     {
@@ -54,9 +59,6 @@ new #[Layout('layouts::pos')] class extends Component
         }
     }
 
-    // ==========================================
-    // STATE & FUNGSI MODAL SELESAI (COMPLETE)
-    // ==========================================
     public bool $showCompleteModal = false;
     public ?int $completeOrderId = null;
     public string $completeOrderNumber = '';
@@ -99,25 +101,37 @@ new #[Layout('layouts::pos')] class extends Component
         }
     }
 
-    // ==========================================
-    // FUNGSI TUTUP MODAL SUKSES
-    // ==========================================
     public function closeSuccessModal()
     {
         $this->showSuccessModal = false;
     }
 
-    // ==========================================
-    // RENDER DATA KE VIEW (BLADE)
-    // ==========================================
     public function with(): array
     {
         $businessId = Filament::getTenant()?->id ?? auth()->user()->businesses()->first()?->id;
         
-        $today = now()->format('Y-m-d');
-        $tomorrow = now()->addDay()->format('Y-m-d');
+        // 1. DYNAMIC DROPDOWN: Ambil semua tanggal unik yang punya PO aktif (status draft)
+        $availableDates = Order::where('business_id', $businessId)
+            ->where('status', 'draft')
+            ->whereNotNull('delivery_date')
+            ->orderBy('delivery_date', 'asc')
+            ->pluck('delivery_date')
+            ->map(fn($date) => \Carbon\Carbon::parse($date)->format('Y-m-d'))
+            ->unique()
+            ->toArray();
 
-        // 1. Data Kiriman Hari Ini (Status masih draft)
+        // Pastikan hari ini selalu ada di dropdown walaupun daftarnya kosong
+        $todayStr = now()->format('Y-m-d');
+        if (!in_array($todayStr, $availableDates)) {
+            $availableDates[] = $todayStr;
+            sort($availableDates);
+        }
+
+        // 2. SET ATURAN WAKTU BERDASARKAN SELECTION DROPDOWN
+        $today = $this->selectedDate ?? $todayStr;
+        $tomorrow = \Carbon\Carbon::parse($today)->addDay()->format('Y-m-d');
+
+        // Tarik Kiriman sesuai tanggal dropdown
         $todayDeliveries = Order::with(['customer', 'orderItems.product'])
             ->where('business_id', $businessId)
             ->whereDate('delivery_date', $today)
@@ -125,7 +139,7 @@ new #[Layout('layouts::pos')] class extends Component
             ->orderBy('created_at', 'asc')
             ->get();
 
-        // 2. PACKING LIST (KONVERSI KE SATUAN DASAR)
+        // Tarik Packing List sesuai tanggal dropdown
         $rawPackingItems = OrderItem::with(['product', 'productUnit']) 
             ->whereHas('order', function ($query) use ($businessId, $today) {
                 $query->where('business_id', $businessId)
@@ -147,7 +161,7 @@ new #[Layout('layouts::pos')] class extends Component
             ];
         })->values();
 
-        // 3. SHOPPING LIST (KONVERSI KE SATUAN DASAR UNTUK BESOK)
+        // Tarik Shopping List (1 hari setelah tanggal dropdown)
         $rawShoppingItems = OrderItem::with(['product', 'productUnit']) 
             ->whereHas('order', function ($query) use ($businessId, $tomorrow) {
                 $query->where('business_id', $businessId)
@@ -169,7 +183,7 @@ new #[Layout('layouts::pos')] class extends Component
             ];
         })->values();
 
-        // 4. SEMUA PO AKTIF (Pemantauan Keseluruhan)
+        // Tetap biarkan Semua PO Aktif global (tidak terikat dropdown) agar pantauan menyeluruh
         $activePoOrders = Order::with(['customer', 'poBatch', 'orderItems.product'])
             ->where('business_id', $businessId)
             ->where('status', 'draft')
@@ -182,8 +196,9 @@ new #[Layout('layouts::pos')] class extends Component
             'packingListToday' => $packingListToday,
             'shoppingListTomorrow' => $shoppingListTomorrow,
             'activePoOrders' => $activePoOrders,
-            'todayDate' => now()->translatedFormat('l, d F Y'),
-            'tomorrowDate' => now()->addDay()->translatedFormat('l, d F Y'),
+            'availableDates' => $availableDates, // Dikirim ke Blade
+            'todayDate' => \Carbon\Carbon::parse($today)->translatedFormat('l, d F Y'),
+            'tomorrowDate' => \Carbon\Carbon::parse($tomorrow)->translatedFormat('l, d F Y'),
         ];
     }
 };

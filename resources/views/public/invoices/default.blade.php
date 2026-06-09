@@ -78,7 +78,7 @@
             <td valign="top" class="text-right">
                 <h1 style="color: {{ $color }}; margin: 0; font-size: 28px; letter-spacing: -1px;">INVOICE</h1>
                 <p style="margin: 5px 0 0 0; font-weight: bold; color: #52525b;">#{{ $order->order_number }}</p>
-                <p style="margin: 2px 0 0 0; color: #a1a1aa; font-size: 12px;">Tanggal: {{ \Carbon\Carbon::parse($order->order_date)->translatedFormat('d F Y') }}</p>
+                <p style="margin: 2px 0 0 0; color: #a1a1aa; font-size: 12px;">Tanggal: {{ \Carbon\Carbon::parse($order->delivery_date)->translatedFormat('d F Y') }}</p>
             </td>
         </tr>
     </table>

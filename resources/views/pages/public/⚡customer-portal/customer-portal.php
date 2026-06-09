@@ -1,10 +1,10 @@
 <?php
 
 use App\Models\Order;
-use Livewire\Component;
+use App\Models\Ledger;
 use App\Models\Customer;
 use App\Models\Wallet;
-use Livewire\Attributes\Layout;
+use Livewire\Component;
 use Livewire\Attributes\Title;
 
 new #[Title('Customer Portal - Cahya Fresh')] class extends Component
@@ -13,7 +13,8 @@ new #[Title('Customer Portal - Cahya Fresh')] class extends Component
     public $business;
     public $unpaidOrders = [];
     public $paidOrders = [];
-    public $draftOrders = []; // <--- TAMBAHAN UNTUK DRAFT/PO
+    public $draftOrders = []; 
+    public $commissionHistory = []; 
     public $wallets = [];
     public $totalUnpaid = 0;
 
@@ -26,22 +27,62 @@ new #[Title('Customer Portal - Cahya Fresh')] class extends Component
         $this->customer = Customer::with('business')->where('slug', $slug)->firstOrFail();
         $this->business = $this->customer->business;
 
-        // Ambil SEMUA pesanan (tanpa filter status dulu)
         $allOrders = Order::with(['orderItems.product', 'delivery'])
             ->where('customer_id', $this->customer->id)
-            ->orderBy('order_date', 'desc')
             ->get();
 
-        // Pisahkan pesanan Draft
-        $this->draftOrders = $allOrders->where('status', 'draft')->values();
+        $this->unpaidOrders = $allOrders->where('status', 'completed')
+            ->whereIn('payment_status', ['unpaid', 'partial'])
+            ->sortByDesc(function ($order) {
+                return $order->delivery_date ?? $order->order_date;
+            })->values()->all();
 
-        // Pisahkan pesanan Selesai
-        $completedOrders = $allOrders->where('status', 'completed');
-        $this->unpaidOrders = $completedOrders->whereIn('payment_status', ['unpaid', 'partial'])->values();
-        $this->paidOrders = $completedOrders->where('payment_status', 'paid')->values();
+        $this->draftOrders = $allOrders->whereIn('status', ['draft', 'processing'])
+            ->sortBy(function ($order) {
+                return $order->delivery_date ?? $order->order_date;
+            })->values()->all();
+
+        $this->paidOrders = $allOrders->where('status', 'completed')
+            ->where('payment_status', 'paid')
+            ->sortByDesc(function ($order) {
+                return $order->delivery_date ?? $order->order_date;
+            })->values()->all();
+
+        $combinedHistory = collect();
+
+        $ordersWithCommission = Order::where('commission_recipient_id', $this->customer->id)
+            ->where('commission_amount', '>', 0)
+            ->get();
+
+        foreach ($ordersWithCommission as $order) {
+            $combinedHistory->push([
+                'date' => $order->order_date,
+                'type' => 'in', 
+                'title' => 'Komisi Masuk (Nota #' . $order->order_number . ')',
+                'amount' => $order->commission_amount,
+                'note' => $order->commission_note ?? 'Bonus pencatatan pesanan',
+            ]);
+        }
+
+        $ledgerWithdrawals = Ledger::where('contact_id', $this->customer->id)
+            ->where('contact_type', Customer::class)
+            ->where('type', 'out') 
+            ->get();
+
+        foreach ($ledgerWithdrawals as $ledger) {
+            $combinedHistory->push([
+                'date' => $ledger->transaction_date,
+                'type' => 'out', 
+                'title' => 'Pencairan Komisi (Withdraw)',
+                'amount' => $ledger->amount,
+                'note' => $ledger->description,
+            ]);
+        }
+
+        $this->commissionHistory = $combinedHistory->sortByDesc('date')->values()->all();
         
-        $this->totalUnpaid = $this->unpaidOrders->sum('total_amount');
-        $this->totalPiutang = $this->unpaidOrders->sum('total_amount');
+        $this->totalUnpaid = collect($this->unpaidOrders)->sum('total_amount');
+        $this->totalPiutang = collect($this->unpaidOrders)->sum('total_amount');
         $this->totalDeposit = $this->customer->deposit_balance ?? 0; 
         $this->totalKomisi = $this->customer->commission_balance ?? 0; 
         

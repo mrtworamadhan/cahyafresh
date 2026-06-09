@@ -183,6 +183,36 @@ class DeliveryResource extends Resource
                     ->relationship('courier', 'name'),
             ])
             ->recordActions([
+                Action::make('update_status')
+                    ->label('Update Status')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('warning') 
+                    ->form([
+                        Select::make('status')
+                            ->label('Ubah Status Pengiriman')
+                            ->options([
+                                'pending' => 'Menunggu Jadwal (Pending)',
+                                'on_delivery' => 'Sedang Dikirim (On Delivery)',
+                                'delivered' => 'Terkirim Sukses (Delivered)',
+                                'failed' => 'Gagal Kirim (Failed)',
+                            ])
+                            ->default(fn ($record) => $record->status) 
+                            ->required(),
+                    ])
+                    ->action(function ($record, array $data) {
+                        $updateData = ['status' => $data['status']];
+                        
+                        if ($data['status'] === 'delivered' && empty($record->delivered_at)) {
+                            $updateData['delivered_at'] = now();
+                        }
+
+                        $record->update($updateData);
+
+                        Notification::make()
+                            ->title('Status pengiriman berhasil diperbarui!')
+                            ->success()
+                            ->send();
+                    }),
                 Action::make('pay_courier')
                     ->label('Release Ongkir')
                     ->icon('heroicon-o-banknotes')
@@ -196,29 +226,25 @@ class DeliveryResource extends Resource
                             ->required(),
                     ])
                     ->action(function ($record, array $data) {
-                        // 1. TARIK KATEGORI BEBAN PENGIRIMAN
                         $kategoriOngkir = \App\Models\FinanceCategory::where('code', 'OP_SHIPPING')->first();
 
-                        // 2. Buat Jurnal Ledger Uang Keluar
                         \App\Models\Ledger::create([
                             'business_id' => $record->business_id,
                             'wallet_id' => $data['wallet_id'],
-                            'finance_category_id' => $kategoriOngkir?->id, // <--- TERIKAT KE COA
+                            'finance_category_id' => $kategoriOngkir?->id,
                             'transaction_date' => now(),
                             'description' => "Pembayaran Ekspedisi/Kurir (" . ($record->courier?->name ?? 'Internal') . ") Nota: " . $record->order->order_number,
                             'type' => 'out', 
                             'amount' => $record->shipping_cost_actual,
-                            'reference_type' => Delivery::class, // Pastikan model Delivery di-import
+                            'reference_type' => Delivery::class,
                             'reference_id' => $record->id,
                         ]);
 
-                        // 3. Potong Saldo Dompet
                         $wallet = \App\Models\Wallet::find($data['wallet_id']);
                         if ($wallet) {
                             $wallet->decrement('balance', $record->shipping_cost_actual);
                         }
 
-                        // 4. Update Status Surat Jalan
                         $record->update(['is_paid_to_courier' => true]);
 
                         Notification::make()
@@ -249,22 +275,20 @@ class DeliveryResource extends Resource
                             $totalPaid = 0;
                             $count = 0;
 
-                            // 1. TARIK KATEGORI BEBAN PENGIRIMAN (Taruh di luar foreach biar performa ngebut!)
                             $kategoriOngkir = \App\Models\FinanceCategory::where('code', 'OP_SHIPPING')->first();
 
                             foreach ($records as $record) {
-                                // Hanya proses yang belum dibayar & punya ongkir
                                 if (!$record->is_paid_to_courier && $record->shipping_cost_actual > 0) {
                                     
                                     \App\Models\Ledger::create([
                                         'business_id' => $record->business_id,
                                         'wallet_id' => $data['wallet_id'],
-                                        'finance_category_id' => $kategoriOngkir?->id, // <--- TERIKAT KE COA
+                                        'finance_category_id' => $kategoriOngkir?->id, 
                                         'transaction_date' => now(),
                                         'description' => "Pelunasan Ekspedisi (" . ($record->courier?->name ?? 'Internal') . ") Nota: " . $record->order->order_number,
                                         'type' => 'out',
                                         'amount' => $record->shipping_cost_actual,
-                                        'reference_type' => Delivery::class, // Pastikan model Delivery di-import
+                                        'reference_type' => Delivery::class, 
                                         'reference_id' => $record->id,
                                     ]);
 

@@ -16,15 +16,29 @@
         </button>
     </div>
 
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 shrink-0 bg-white dark:bg-zinc-800 p-4 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm">
+        <div class="flex items-center gap-2">
+            <x-heroicon-o-calendar class="w-5 h-5 text-indigo-500" />
+            <span class="text-sm font-bold text-zinc-600 dark:text-zinc-400">Filter Tanggal Kerja Logistik:</span>
+        </div>
+        <select wire:model.live="selectedDate" class="text-sm font-bold bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-600 text-zinc-800 dark:text-zinc-200 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500 transition w-full sm:w-auto cursor-pointer">
+            @foreach($availableDates as $date)
+                <option value="{{ $date }}">
+                    {{ $date === now()->format('Y-m-d') ? ' Hari Ini — ' : '' }}{{ \Carbon\Carbon::parse($date)->translatedFormat('d M Y') }}
+                </option>
+            @endforeach
+        </select>
+    </div>
+
     <div class="flex bg-white dark:bg-zinc-800 p-1.5 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-700 w-full mb-4 shrink-0 overflow-x-auto hide-scrollbar">
         <button @click="activeTab = 'kiriman'" :class="activeTab === 'kiriman' ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-400 font-bold shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'" class="flex-1 py-2.5 px-4 rounded-lg text-sm transition-all flex justify-center items-center gap-2 whitespace-nowrap">
-            <x-heroicon-o-truck class="w-5 h-5" /> Daftar Kirim Hari Ini
+            <x-heroicon-o-truck class="w-5 h-5" /> Daftar Kiriman
         </button>
         <button @click="activeTab = 'packing'" :class="activeTab === 'packing' ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 font-bold shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'" class="flex-1 py-2.5 px-4 rounded-lg text-sm transition-all flex justify-center items-center gap-2 whitespace-nowrap">
-            <x-heroicon-o-cube class="w-5 h-5" /> Packing List (Hari Ini)
+            <x-heroicon-o-cube class="w-5 h-5" /> Packing List
         </button>
         <button @click="activeTab = 'shopping'" :class="activeTab === 'shopping' ? 'bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-400 font-bold shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'" class="flex-1 py-2.5 px-4 rounded-lg text-sm transition-all flex justify-center items-center gap-2 whitespace-nowrap">
-            <x-heroicon-o-shopping-bag class="w-5 h-5" /> Shopping List (Buat Besok)
+            <x-heroicon-o-shopping-bag class="w-5 h-5" /> Shopping List (Esok)
         </button>
         <button @click="activeTab = 'semua_po'" :class="activeTab === 'semua_po' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-400 font-bold shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'" class="flex-1 py-2.5 px-4 rounded-lg text-sm transition-all flex justify-center items-center gap-2 whitespace-nowrap">
             <x-heroicon-o-queue-list class="w-5 h-5" /> Semua PO Aktif
@@ -84,7 +98,7 @@
                     <div class="col-span-full py-16 flex flex-col items-center justify-center text-zinc-400">
                         <x-heroicon-o-face-smile class="w-16 h-16 mb-4 opacity-50" />
                         <h3 class="text-lg font-bold text-zinc-500">Santai Dulu!</h3>
-                        <p class="text-sm font-medium mt-1">Tidak ada jadwal pengiriman/pengambilan PO untuk hari ini.</p>
+                        <p class="text-sm font-medium mt-1">Tidak ada jadwal pengiriman/pengambilan PO untuk tanggal ini.</p>
                     </div>
                 @endforelse
             </div>
@@ -93,8 +107,8 @@
         <div x-show="activeTab === 'packing'" style="display: none;" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" class="flex flex-col gap-4">
             <div class="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-xl border border-amber-200 dark:border-amber-800/50 flex justify-between items-center">
                 <div>
-                    <h3 class="font-black text-amber-700 dark:text-amber-400">Packing List (Total Kirim Hari Ini)</h3>
-                    <p class="text-xs text-amber-600/70 dark:text-amber-500 font-medium">Siapkan barang-barang di bawah ini dari gudang untuk pesanan hari ini.</p>
+                    <h3 class="font-black text-amber-700 dark:text-amber-400">Packing List (Total Muatan: {{ $todayDate }})</h3>
+                    <p class="text-xs text-amber-600/70 dark:text-amber-500 font-medium">Siapkan barang-barang di bawah ini dari gudang untuk pesanan pada tanggal terpilih.</p>
                 </div>
             </div>
 
@@ -120,7 +134,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="3" class="px-6 py-8 text-center text-zinc-400 font-medium">Tidak ada barang yang perlu disiapkan hari ini.</td>
+                                <td colspan="3" class="px-6 py-8 text-center text-zinc-400 font-medium">Tidak ada muatan barang yang perlu disiapkan pada tanggal ini.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -131,8 +145,8 @@
         <div x-show="activeTab === 'shopping'" style="display: none;" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" class="flex flex-col gap-4">
             <div class="bg-rose-50 dark:bg-rose-900/20 p-4 rounded-xl border border-rose-200 dark:border-rose-800/50 flex justify-between items-center">
                 <div>
-                    <h3 class="font-black text-rose-700 dark:text-rose-400">Shopping List (Kiriman: {{ $tomorrowDate }})</h3>
-                    <p class="text-xs text-rose-600/70 dark:text-rose-500 font-medium">Rekapan barang pesanan esok hari. Pastikan kulakan/belanja hari ini agar besok stok aman.</p>
+                    <h3 class="font-black text-rose-700 dark:text-rose-400">Shopping List (Kulakan Untuk Kiriman: {{ $tomorrowDate }})</h3>
+                    <p class="text-xs text-rose-600/70 dark:text-rose-500 font-medium">Rekapan kebutuhan esok hari dari tanggal filter. Pastikan belanja hari ini agar besok stok aman.</p>
                 </div>
             </div>
 
@@ -141,7 +155,7 @@
                     <thead class="bg-zinc-50 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-700 uppercase text-[10px] font-bold text-zinc-500 tracking-wider">
                         <tr>
                             <th class="px-6 py-4">Nama Produk</th>
-                            <th class="px-6 py-4 text-center">Total Kebutuhan Esok</th>
+                            <th class="px-6 py-4 text-center">Total Kebutuhan Kulakan</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-zinc-100 dark:divide-zinc-700">
@@ -157,7 +171,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="2" class="px-6 py-8 text-center text-zinc-400 font-medium">Belum ada pesanan untuk kiriman esok hari.</td>
+                                <td colspan="2" class="px-6 py-8 text-center text-zinc-400 font-medium">Belum ada pesanan masuk untuk jadwal keesokan harinya.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -176,8 +190,8 @@
         <div x-show="activeTab === 'semua_po'" style="display: none;" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" class="flex flex-col gap-4">
             <div class="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-200 dark:border-purple-800/50 flex justify-between items-center">
                 <div>
-                    <h3 class="font-black text-purple-700 dark:text-purple-400">Semua PO Aktif Belum Terkirim</h3>
-                    <p class="text-xs text-purple-600/70 dark:text-purple-500 font-medium">Pantau, batalkan, atau kelola seluruh pesanan Pre-Order yang masih berjalan.</p>
+                    <h3 class="font-black text-purple-700 dark:text-purple-400">Semua PO Aktif Belum Terkirim (Global)</h3>
+                    <p class="text-xs text-purple-600/70 dark:text-purple-500 font-medium">Pantau, batalkan, atau kelola seluruh pesanan Pre-Order yang masih berjalan menyeluruh.</p>
                 </div>
                 <span class="bg-purple-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg">{{ count($activePoOrders) }} Pesanan</span>
             </div>
@@ -190,7 +204,7 @@
                             Kirim: {{ \Carbon\Carbon::parse($order->delivery_date)->translatedFormat('d M Y') }}
                         </div>
 
-                        <div class="flex justify-between items-start mt-3">
+                        <div class="flex justify-between items-center mt-3">
                             <div>
                                 <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-1 bg-zinc-100 dark:bg-zinc-700 text-zinc-500 rounded">{{ $order->order_number }}</span>
                                 <h4 class="font-black text-lg text-zinc-800 dark:text-zinc-100 mt-1">{{ $order->customer?->name ?? 'Pelanggan Umum' }}</h4>
@@ -234,11 +248,10 @@
         </div>
 
     </div>
-    <!-- MODAL KONFIRMASI PROSES SELESAI -->
+
     @if($showCompleteModal)
         <div class="fixed inset-0 z-[105] flex items-center justify-center bg-zinc-900/80 backdrop-blur-sm p-4 animate-fade-in">
             <div class="bg-white dark:bg-zinc-800 rounded-3xl w-full max-w-md shadow-2xl border border-zinc-200 dark:border-zinc-700 p-6 flex flex-col animate-fade-in-up">
-                
                 <div class="flex items-center gap-4 mb-5 border-b border-zinc-200 dark:border-zinc-700 pb-4">
                     <div class="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center shrink-0">
                         <x-heroicon-o-check-badge class="w-7 h-7" />
@@ -248,7 +261,6 @@
                         <p class="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Nota: {{ $completeOrderNumber }}</p>
                     </div>
                 </div>
-
                 <div class="bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-200 dark:border-indigo-800/50 mb-6">
                     <p class="text-sm font-bold text-indigo-700 dark:text-indigo-400 mb-2">Konfirmasi Pengiriman:</p>
                     <ul class="text-xs text-indigo-600/80 dark:text-indigo-500 space-y-1.5 font-medium list-disc pl-4">
@@ -257,11 +269,8 @@
                         <li>Tindakan ini akan mengubah status pesanan menjadi Selesai secara permanen.</li>
                     </ul>
                 </div>
-
                 <div class="flex gap-3">
-                    <button type="button" wire:click="closeCompleteModal" class="flex-1 py-3.5 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-700 dark:text-zinc-300 font-bold rounded-xl text-sm transition">
-                        Batal
-                    </button>
+                    <button type="button" wire:click="closeCompleteModal" class="flex-1 py-3.5 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-700 dark:text-zinc-300 font-bold rounded-xl text-sm transition">Batal</button>
                     <button type="button" wire:click="executeCompleteOrder" class="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 text-sm transition flex justify-center items-center gap-2">
                         <x-heroicon-o-check-circle class="w-4 h-4" /> Ya, Proses Selesai
                     </button>
@@ -269,10 +278,10 @@
             </div>
         </div>
     @endif
+
     @if($showCancelModal)
         <div class="fixed inset-0 z-[105] flex items-center justify-center bg-zinc-900/80 backdrop-blur-sm p-4 animate-fade-in">
             <div class="bg-white dark:bg-zinc-800 rounded-3xl w-full max-w-md shadow-2xl border border-zinc-200 dark:border-zinc-700 p-6 flex flex-col animate-fade-in-up">
-                
                 <div class="flex items-center gap-4 mb-5 border-b border-zinc-200 dark:border-zinc-700 pb-4">
                     <div class="w-12 h-12 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-full flex items-center justify-center shrink-0">
                         <x-heroicon-o-exclamation-triangle class="w-7 h-7" />
@@ -282,7 +291,6 @@
                         <p class="text-xs text-zinc-500 dark:text-zinc-400 font-medium">Nota: {{ $cancelOrderNumber }}</p>
                     </div>
                 </div>
-
                 <div class="bg-rose-50 dark:bg-rose-900/10 p-4 rounded-xl border border-rose-200 dark:border-rose-800/50 mb-6">
                     <p class="text-sm font-bold text-rose-700 dark:text-rose-400 mb-2">Perhatian Terkait Dana:</p>
                     <ul class="text-xs text-rose-600/80 dark:text-rose-500 space-y-1 font-medium list-disc pl-4">
@@ -291,11 +299,8 @@
                         <li class="mt-2 text-rose-500">Jika konsumen sudah membayar, membatalkan pesanan ini <strong>TIDAK</strong> akan otomatis mengembalikan uang di sistem kasir. Anda wajib mencatat Pengeluaran Operasional secara manual di menu Keuangan sebagai <strong>"Refund/Pengembalian Dana"</strong>.</li>
                     </ul>
                 </div>
-
                 <div class="flex gap-3">
-                    <button type="button" wire:click="closeCancelModal" class="flex-1 py-3.5 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-700 dark:text-zinc-300 font-bold rounded-xl text-sm transition">
-                        Kembali
-                    </button>
+                    <button type="button" wire:click="closeCancelModal" class="flex-1 py-3.5 bg-zinc-100 dark:bg-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-600 text-zinc-700 dark:text-zinc-300 font-bold rounded-xl text-sm transition">Kembali</button>
                     <button type="button" wire:click="executeCancelOrder" class="flex-1 py-3.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-lg shadow-rose-500/20 text-sm transition flex justify-center items-center gap-2">
                         <x-heroicon-o-trash class="w-4 h-4" /> Ya, Batalkan PO
                     </button>
@@ -303,6 +308,7 @@
             </div>
         </div>
     @endif
+
     @if($showSuccessModal)
         <div class="fixed inset-0 z-[110] flex items-center justify-center bg-zinc-900/80 backdrop-blur-sm p-4 animate-fade-in">
             <div class="bg-white dark:bg-zinc-800 rounded-3xl w-full max-w-sm shadow-2xl border border-zinc-200 dark:border-zinc-700 p-6 flex flex-col items-center text-center animate-fade-in-up">
@@ -311,9 +317,7 @@
                 </div>
                 <h3 class="text-xl font-black text-zinc-800 dark:text-zinc-100 mb-2">Berhasil!</h3>
                 <p class="text-sm text-zinc-500 dark:text-zinc-400 mb-6 font-medium">{{ $successMessage }}</p>
-                <button type="button" wire:click="closeSuccessModal" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/20 text-sm transition">
-                    Tutup
-                </button>
+                <button type="button" wire:click="closeSuccessModal" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-500/20 text-sm transition">Tutup</button>
             </div>
         </div>
     @endif

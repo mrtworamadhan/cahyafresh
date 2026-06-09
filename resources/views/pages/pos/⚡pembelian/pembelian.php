@@ -12,7 +12,6 @@ new #[Layout('layouts::pos')] class extends Component
 {
     public string $searchProduct = '';
     
-    // State Pembelian
     public array $cart = [];
     public $supplierId = '';
     public bool $showCheckoutModal = false;
@@ -21,7 +20,6 @@ new #[Layout('layouts::pos')] class extends Component
     public $walletId = null;
     public string $invoiceNumber = '';
     
-    // Modal Sukses
     public bool $showSuccessModal = false;
 
     public function addToCart($productId)
@@ -29,7 +27,6 @@ new #[Layout('layouts::pos')] class extends Component
         $product = Product::with('units')->find($productId);
         if (!$product) return;
 
-        // Cek jika produk dan satuannya sama
         $existingIndex = collect($this->cart)->search(fn($item) => $item['product_id'] === $productId && $item['unit_id'] === null);
 
         if ($existingIndex !== false) {
@@ -40,7 +37,6 @@ new #[Layout('layouts::pos')] class extends Component
                 'name' => $product->name,
                 'price' => $product->cost_price ?? 0, 
                 'qty' => 1,
-                // --- Tambahan Baru ---
                 'unit_id' => null, 
                 'unit_name' => 'Satuan Dasar',
                 'base_cost' => $product->cost_price ?? 0,
@@ -54,13 +50,11 @@ new #[Layout('layouts::pos')] class extends Component
         if (empty($unitId)) {
             $this->cart[$index]['unit_id'] = null;
             $this->cart[$index]['unit_name'] = 'Satuan Dasar';
-            // Kembalikan ke harga modal dasar jika ada, atau biarkan kasir input
         } else {
             $unit = collect($this->cart[$index]['available_units'])->firstWhere('id', (int)$unitId);
             if ($unit) {
                 $this->cart[$index]['unit_id'] = $unit['id'];
                 $this->cart[$index]['unit_name'] = $unit['unit_name'];
-                // Jika di tabel satuan ada kolom modal per karung, panggil di sini (opsional)
                 $this->cart[$index]['price'] = $unit['unit_selling_price'] ?? 0; 
             }
         }
@@ -116,15 +110,14 @@ new #[Layout('layouts::pos')] class extends Component
                 'purchase_date' => now(),
                 'total_amount' => $finalTotal,
                 'status' => $this->paymentStatus, 
-                'is_stock_received' => false, // <--- SANGAT PENTING!
+                'is_stock_received' => false, 
             ]);
 
-            // 2. Simpan Detail Item
             foreach ($this->cart as $item) {
                 \App\Models\PurchaseItem::create([
                     'purchase_id' => $purchase->id,
                     'product_id' => $item['product_id'],
-                    'product_unit_id' => $item['unit_id'] ?: null, // <--- SIMPAN SATUANNYA
+                    'product_unit_id' => $item['unit_id'] ?: null,
                     'quantity' => (int)$item['qty'],
                     'unit_price' => (float)$item['price'], 
                     'subtotal' => (float)$item['price'] * (int)$item['qty'],
@@ -134,13 +127,12 @@ new #[Layout('layouts::pos')] class extends Component
             // 3. Jurnal Keuangan
             $paidMoney = $this->paymentStatus === 'unpaid' ? 0 : (float)$this->paymentAmount;
             if ($paidMoney > 0 && $this->walletId) {
-                // TARIK KATEGORI PEMBELIAN STOK
                 $kategoriBeli = \App\Models\FinanceCategory::where('code', 'EXP_PURCHASE')->first();
 
                 Ledger::create([
                     'business_id' => $businessId, 
                     'wallet_id' => $this->walletId, 
-                    'finance_category_id' => $kategoriBeli?->id, // <--- TAMBAHKAN INI
+                    'finance_category_id' => $kategoriBeli?->id,
                     'transaction_date' => now(),
                     'description' => "Pembayaran Restock ke Supplier Nota: {$purchase->invoice_number}",
                     'type' => 'out', 
@@ -152,7 +144,6 @@ new #[Layout('layouts::pos')] class extends Component
             }
 
             // 4. TRIGGER OBSERVER SECARA PAKSA!
-            // Update jadi true. Ini akan memanggil fungsi updated() di PurchaseObserver untuk merata-ratakan HPP & Tambah Stok
             $purchase->update(['is_stock_received' => true]);
         });
 

@@ -40,7 +40,6 @@ class CustomersTable
                     ->color(fn ($state) => $state > 0 ? 'warning' : 'secondary'),
             ])
             ->filters([
-                // Nanti kita bisa tambah filter di sini
             ])
             ->recordActions([
                 EditAction::make(),
@@ -49,11 +48,8 @@ class CustomersTable
                     ->icon('heroicon-o-share')
                     ->color('info')
                     ->action(function ($record) {
-                        // Ganti URL ini dengan URL portal yang beneran lu pake nanti
                         $link = url('/portal/' . $record->slug); 
                         
-                        // Lu bisa pilih mau langsung copy ke clipboard
-                        // Atau kalau mau simpel, pake script buat buka WA:
                         $pesan = "Halo {$record->name}, berikut adalah link portal pelanggan Cahya Fresh untuk cek riwayat order dan komisi lu ya: " . $link;
                         $waLink = "https://wa.me/" . preg_replace('/[^0-9]/', '', $record->phone) . "?text=" . urlencode($pesan);
                         
@@ -82,7 +78,6 @@ class CustomersTable
                         $rawAmount = (string) $data['amount'];
                         $cleanString = str_replace(['.', ','], ['', '.'], $rawAmount);
                         
-                        // 3. Jadikan angka float murni (Contoh: 189800.00)
                         $cleanAmount = (float) $cleanString; 
                             Ledger::create([
                             'business_id' => $record->business_id,
@@ -91,7 +86,7 @@ class CustomersTable
                             'transaction_date' => now(),
                             'description' => 'Terima Deposit: ' . ($data['notes'] ?: 'Titipan pelanggan'),
                             'type' => 'in', 
-                            'amount' => $cleanAmount, // Masukkan angka yang udah bersih!
+                            'amount' => $cleanAmount, 
                             'contact_type' => \App\Models\Customer::class,
                             'contact_id' => $record->id,
                         ]);
@@ -124,7 +119,7 @@ class CustomersTable
                         TextInput::make('amount')
                             ->label('Nominal Pencairan')
                             ->prefix('Rp')
-                            ->default($record->commission_balance) // Default isi otomatis dengan seluruh saldo
+                            ->default($record->commission_balance)
                             ->required()
                             ->mask(RawJs::make('$money($input, \',\', \'.\', 0)')) 
                             ->formatStateUsing(function ($state) {
@@ -138,7 +133,7 @@ class CustomersTable
                     ->action(function (array $data, $record) {
                         $rawAmount = (string) $data['amount'];
                         $cleanString = str_replace(['.', ','], ['', '.'], $rawAmount);
-                        $cleanAmount = (float) $cleanString; // Jadi angka murni
+                        $cleanAmount = (float) $cleanString; 
 
                         if ($cleanAmount > $record->commission_balance) {
                             Notification::make()->title('Gagal! Nominal melebihi saldo komisi.')->danger()->send();
@@ -159,11 +154,9 @@ class CustomersTable
                             'contact_id' => $record->id,
                         ]);
                         
-                        // Potong Saldo Komisi Agen
                         $record->commission_balance -= $cleanAmount;
                         $record->save();
 
-                        // Potong Saldo Fisik di Dompet Kasir
                         $wallet = \App\Models\Wallet::find($data['wallet_id']);
                         if ($wallet) {
                             $wallet->balance -= $cleanAmount;

@@ -123,6 +123,25 @@ class OrdersTable
                     ->action(function (array $data, \App\Models\Order $record): void {
                         $record->update(['status' => $data['status']]);
                         
+                        if ($record->delivery) {
+                            $deliveryUpdate = [];
+
+                            if ($data['status'] === 'completed') {
+                                $deliveryUpdate['status'] = 'delivered';
+                                
+                                if (empty($record->delivery->delivered_at)) {
+                                    $deliveryUpdate['delivered_at'] = now();
+                                }
+                            } 
+                            elseif ($data['status'] === 'processing') {
+                                $deliveryUpdate['status'] = 'on_delivery';
+                            }
+
+                            if (!empty($deliveryUpdate)) {
+                                $record->delivery->update($deliveryUpdate);
+                            }
+                        }
+                        
                         Notification::make()
                             ->title('Status pesanan berhasil diperbarui!')
                             ->success()
@@ -172,7 +191,7 @@ class OrdersTable
                         $kategoriPenjualan = \App\Models\FinanceCategory::where('code', 'INC_AR')->first();
                         $kategoriOngkir = \App\Models\FinanceCategory::where('code', 'INC_SHIPPING')->first();
 
-                        $ongkirSudahDibayar = \App\Models\Ledger::where('reference_type', \App\Models\Order::class)
+                        $ongkirSudahDibayar = Ledger::where('reference_type', \App\Models\Order::class)
                             ->where('reference_id', $record->id)
                             ->where('finance_category_id', $kategoriOngkir?->id)
                             ->sum('amount');
@@ -183,7 +202,7 @@ class OrdersTable
                         $barangDibayar = $amountPaid - $ongkirDibayar;
 
                         if ($barangDibayar > 0) {
-                            \App\Models\Ledger::create([
+                            Ledger::create([
                                 'business_id' => $record->business_id,
                                 'wallet_id' => $data['wallet_id'],
                                 'finance_category_id' => $kategoriPenjualan?->id,
@@ -191,7 +210,7 @@ class OrdersTable
                                 'description' => 'Pelunasan Piutang Barang Nota: ' . $record->order_number,
                                 'type' => 'in',
                                 'amount' => $barangDibayar,
-                                'contact_type' => \App\Models\Customer::class,
+                                'contact_type' => Customer::class,
                                 'contact_id' => $record->customer_id,
                                 'reference_type' => \App\Models\Order::class,
                                 'reference_id' => $record->id,
@@ -199,7 +218,7 @@ class OrdersTable
                         }
 
                         if ($ongkirDibayar > 0) {
-                            \App\Models\Ledger::create([
+                            Ledger::create([
                                 'business_id' => $record->business_id,
                                 'wallet_id' => $data['wallet_id'],
                                 'finance_category_id' => $kategoriOngkir?->id,
@@ -207,7 +226,7 @@ class OrdersTable
                                 'description' => 'Pelunasan Ongkir Nota: ' . $record->order_number,
                                 'type' => 'in',
                                 'amount' => $ongkirDibayar,
-                                'contact_type' => \App\Models\Customer::class,
+                                'contact_type' => Customer::class,
                                 'contact_id' => $record->customer_id,
                                 'reference_type' => \App\Models\Order::class,
                                 'reference_id' => $record->id,
