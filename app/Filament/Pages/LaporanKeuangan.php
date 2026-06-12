@@ -265,7 +265,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                             ]),
 
                         // ==========================================
-                        // TAB 5: NERACA
+                        // TAB 5: NERACA (SUDAH DIPECAH UTUH - TIDAK GLONDONGAN)
                         // ==========================================
                         Tab::make('Neraca (Balance Sheet)')
                             ->icon('heroicon-o-scale')
@@ -281,13 +281,20 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                             TextEntry::make('total_aktiva')->label('TOTAL AKTIVA')->money('IDR')->weight('black')->color('primary')->size(TextSize::Large),
                                         ])->columnSpan(1),
                                         
-                                    Section::make('PASIVA (Kewajiban & Ekuitas)')
+                                    Section::make('PASIVA (Kewajiban & Struktur Ekuitas)')
                                         ->icon('heroicon-o-scale')
                                         ->schema([
+                                            // 1. Kelompok Kewajiban (Liabilitas)
                                             TextEntry::make('hutang_usaha_neraca')->label('Hutang Usaha (Ke Supplier)')->money('IDR')->color('danger'),
                                             TextEntry::make('deposit_pel')->label('Titipan Deposit Konsumen')->money('IDR')->color('danger'),
                                             TextEntry::make('hutang_komisi')->label('Hutang Komisi & Referral')->money('IDR')->color('danger'),
-                                            TextEntry::make('ekuitas')->label('Kekayaan Bersih Usaha (Net Worth)')->money('IDR')->color('success'),
+                                            
+                                            // 2. PERBAIKAN: Kelompok Ekuitas Dipecah Resmi Sesuai Request Lu
+                                            TextEntry::make('modal_awal')->label('Modal Awal / Suntikan Disetor')->money('IDR')->color('info'),
+                                            TextEntry::make('laba_berjalan')->label('Laba Berjalan (Periode Ini)')->money('IDR')->color('success'),
+                                            TextEntry::make('prive')->label('Prive (Tarik Modal Pribadi)')->money('IDR')->color('danger'),
+                                            TextEntry::make('penyesuaian_neraca')->label('Selisih Penyesuaian Akuntansi')->money('IDR')->color('warning')->helperText('Selisih transaksi non-kas/backdate.'),
+                                            
                                             TextEntry::make('total_pasiva')->label('TOTAL PASIVA')->money('IDR')->weight('black')->color('primary')->size(TextSize::Large),
                                         ])->columnSpan(1),
                                 ])
@@ -422,15 +429,13 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $labaBersih = $labaKotor - $totalBeban;
 
         // ==============================================================
-        // --- B. PERBAIKAN TOTAL: ARUS KAS (CASHFLOW MURNI COA JOIN) ---
-        // KUNCI SAKTI: Mengganti Eloquent ORM dengan SQL INNER JOIN 
-        // Agar tembus Global Scope Multi-Tenant untuk Kategori System (Null)
+        // --- B. ARUS KAS (CASHFLOW MURNI COA JOIN) ---
         // ==============================================================
         $queryKasMasuk = Ledger::query()
             ->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
             ->where('ledgers.business_id', $businessId)
             ->where('ledgers.type', 'in')
-            ->whereNotNull('ledgers.wallet_id') // Filter murni mutasi keuangan tunai/bank
+            ->whereNotNull('ledgers.wallet_id') 
             ->whereBetween('ledgers.transaction_date', [$startDate, $endDate])
             ->select('finance_categories.name as category_name', DB::raw('SUM(ledgers.amount) as total'))
             ->groupBy('finance_categories.id', 'finance_categories.name')
@@ -450,7 +455,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             ->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
             ->where('ledgers.business_id', $businessId)
             ->where('ledgers.type', 'out')
-            ->whereNotNull('ledgers.wallet_id') // Filter murni mutasi keuangan tunai/bank
+            ->whereNotNull('ledgers.wallet_id') 
             ->whereBetween('ledgers.transaction_date', [$startDate, $endDate])
             ->select('finance_categories.name as category_name', DB::raw('SUM(ledgers.amount) as total'))
             ->groupBy('finance_categories.id', 'finance_categories.name')
@@ -508,7 +513,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         }
 
         // ==============================================================
-        // --- D. NERACA ---
+        // --- D. NERACA & PECAHAN EKUITAS ---
         // ==============================================================
         $kas = Wallet::where('business_id', $businessId)->sum('balance');
         $stok = Product::where('business_id', $businessId)->sum(DB::raw('stock * base_price'));
@@ -518,7 +523,22 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $depositPel = Customer::where('business_id', $businessId)->sum('deposit_balance');
         $hutangKomisi = Customer::where('business_id', $businessId)->sum('commission_balance');
         $kewajiban = $totalHutang + $depositPel + $hutangKomisi;
-        $ekuitas = $aktiva - $kewajiban;
+        
+        // 1. Tarik Nominal Modal Disetor (Code: EQ_MODAL) Tembus Tenant Scope Global
+        $modalCategory = FinanceCategory::withoutGlobalScopes()->where('code', 'EQ_MODAL')->first();
+        $modalAwal = Ledger::where('business_id', $businessId)
+            ->where('finance_category_id', $modalCategory?->id)
+            ->sum('amount');
+
+        // 2. Tarik Nominal Prive / Tarik Modal (Code: EQ_PRIVE) Tembus Tenant Scope Global
+        $priveCategory = FinanceCategory::withoutGlobalScopes()->where('code', 'EQ_PRIVE')->first();
+        $prive = Ledger::where('business_id', $businessId)
+            ->where('finance_category_id', $priveCategory?->id)
+            ->sum('amount');
+
+        // 3. Hitung Selisih Penyesuaian Akuntansi Riil Antara Aktiva vs Pasiva Komponen
+        $ekuitasBuku = $modalAwal + $labaBersih - $prive;
+        $penyesuaianNeraca = $aktiva - ($kewajiban + $ekuitasBuku);
 
         // ==============================================================
         // --- E. ANALISA USAHA (RASIO) ---
@@ -556,10 +576,16 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             
             'hutang_usaha_neraca' => (float)$totalHutang, 
             'deposit_pel' => (float)$depositPel, 
-            'hutang_comm' => (float)$hutangKomisi,
             'hutang_komisi' => (float)$hutangKomisi, 
-            'total_pasiva' => (float)$aktiva, 
-            'ekuitas' => (float)$ekuitas,
+            
+            // Komponen Pecahan Ekuitas Baru
+            'modal_awal' => (float)$modalAwal,
+            'laba_berjalan' => (float)$labaBersih,
+            'prive' => (float)$prive,
+            'penyesuaian_neraca' => (float)$penyesuaianNeraca,
+            
+            'total_pasiva' => (float)$aktiva, // Mengunci Balance Keseimbangan Aktiva = Pasiva
+            'ekuitas' => (float)($aktiva - $kewajiban),
 
             'profit_margin' => $profitMargin,
             'status_margin' => $profitMargin >= 10 ? 'Sangat Sehat' : ($profitMargin > 0 ? 'Kurang Ideal' : 'Rugi / Bahaya'),
