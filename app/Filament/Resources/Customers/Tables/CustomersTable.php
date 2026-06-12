@@ -140,7 +140,7 @@ class CustomersTable
                             return;
                         }
 
-                        $kategoriKomisi = \App\Models\FinanceCategory::withoutGlobalScopes()::where('code', 'OP_COMMISSION')->first();
+                        $kategoriKomisi = \App\Models\FinanceCategory::withoutGlobalScopes()->where('code', 'OP_COMMISSION')->first();
 
                         Ledger::create([
                             'business_id' => $record->business_id,
