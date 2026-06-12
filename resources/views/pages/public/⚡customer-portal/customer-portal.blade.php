@@ -216,7 +216,7 @@
             </div>
 
             @forelse(collect($commissionOrders) as $order)             
-                <div x-data="{ expanded: false }" class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-purple-100 dark:border-purple-900/30 overflow-hidden">                 
+                <div x-data="{ expanded: false }" class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-700 overflow-hidden">                 
                     <button @click="expanded = !expanded" class="w-full p-4 flex justify-between items-center text-left hover:bg-purple-50/30 dark:hover:bg-purple-900/5 transition">                     
                         <div>                         
                             <span class="inline-block px-2 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400 text-[10px] font-black uppercase rounded mb-1">Komisi Masuk</span>                         
@@ -238,10 +238,9 @@
                                     <div class="flex justify-between items-center text-xs p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-700/50 shadow-xs">                                     
                                         <div>
                                             <p class="font-bold text-zinc-700 dark:text-zinc-300">{{ data_get($item, 'product.name', 'Produk Terhapus') }}</p>
-                                            <p class="text-[10px] text-zinc-400">Jumlah Beli: {{ data_get($item, 'qty_billed', 0) }}x</p>
                                         </div>
                                         <div class="text-right">
-                                            <span class="text-[11px] font-medium text-zinc-400">Subtotal: Rp {{ number_format(data_get($item, 'subtotal', 0), 0, ',', '.') }}</span>
+                                            <span class="text-[11px] font-medium text-zinc-400">Jumlah Beli: {{ data_get($item, 'qty_billed', 0) }}x{{ data_get($item, 'commission_per_unit', 0) }}</span>
                                         </div>                                
                                     </div>                             
                                 @endforeach                         
