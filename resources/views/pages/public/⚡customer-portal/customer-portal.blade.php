@@ -206,74 +206,60 @@
                 </div>         
             @endforelse     
         </div>
-    </div>
-
-    <div x-show="activeTab === 'commission'" style="display: none;" x-transition:enter="transition ease-out duration-300"
-        x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0"
-        class="p-4 space-y-4">
-    
-        <div
-            class="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-200 dark:border-purple-800/50 flex justify-between items-center">
-            <div>
-                <h3 class="font-black text-purple-700 dark:text-purple-400">Rincian Komisi Penjualan</h3>
-                <p class="text-xs text-purple-600/70 dark:text-purple-500 font-medium">Klik pada nomor nota untuk membedah
-                    pembagian komisi per produk.</p>
-            </div>
-        </div>
-    
-        @forelse($paidOrders->where('commission', '>', 0) as $order)
-            <div x-data="{ expanded: false }"
-                class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-purple-100 dark:border-purple-900/30 overflow-hidden">
-                <button @click="expanded = !expanded"
-                    class="w-full p-4 flex justify-between items-center text-left hover:bg-purple-50/30 dark:hover:bg-purple-900/5 transition">
-                    <div>
-                        <span
-                            class="inline-block px-2 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400 text-[10px] font-black uppercase rounded mb-1">Nota
-                            Sukses</span>
-                        <h3 class="font-bold text-sm text-zinc-700 dark:text-zinc-300">{{ $order->order_number }}</h3>
-                        <p class="text-xs text-zinc-400">Tanggal:
-                            {{ \Carbon\Carbon::parse($order->order_date)->format('d M Y') }}</p>
-                    </div>
-                    <div class="text-right flex flex-col items-end gap-1">
-                        <span class="text-base font-black text-purple-600 dark:text-purple-400">+Rp
-                            {{ number_format($order->commission, 0, ',', '.') }}</span>
-                        <x-heroicon-o-chevron-down class="w-4 h-4 text-zinc-400 transition-transform duration-300"
-                            x-bind:class="expanded ? 'rotate-180' : ''" />
-                    </div>
-                </button>
-
-                <div x-show="expanded" x-collapse>
-                    <div class="p-4 border-t border-zinc-100 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/20">
-                        <p class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2.5">Breakdown Item Komisi:
-                        </p>
-
-                        <div class="space-y-2">
-                            @foreach($order->orderItems as $item)
-                                <div
-                                    class="flex justify-between items-center text-xs p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-700/50 shadow-xs">
-                                    <div>
-                                        <p class="font-bold text-zinc-700 dark:text-zinc-300">{{ $item->product->name }}</p>
-                                        <p class="text-[10px] text-zinc-400">Kuantitas: {{ $item->qty_billed }}x</p>
-                                    </div>
-                                    <div class="text-right">
-                                        <span class="font-semibold text-purple-500">Rp
-                                            {{ number_format($item->subtotal * 0.01, 0, ',', '.') }}</span>
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-                    </div>
+        <div x-show="activeTab === 'commission'" style="display: none;" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" class="p-4 space-y-4">         
+            
+            <div class="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-200 dark:border-purple-800/50 flex justify-between items-center">
+                <div>
+                    <h3 class="font-black text-purple-700 dark:text-purple-400">Rincian Komisi Penjualan</h3>
+                    <p class="text-xs text-purple-600/70 dark:text-purple-500 font-medium">Klik pada nomor nota untuk membedah pembagian komisi per produk.</p>
                 </div>
             </div>
-        @empty
-            <div class="text-center py-16 opacity-50">
-                <x-heroicon-o-gift class="w-16 h-16 mx-auto mb-3 text-purple-400" />
-                <p class="font-bold">Belum ada catatan komisi barang.</p>
-                <p class="text-xs text-zinc-400 mt-1">Komisi akan terhitung otomatis ketika ada transaksi selesai yang
-                    menggunakan referral Anda.</p>
-            </div>
-        @endforelse
+
+            @forelse(collect($paidOrders)->where('commission', '>', 0) as $order)             
+                <div x-data="{ expanded: false }" class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-purple-100 dark:border-purple-900/30 overflow-hidden">                 
+                    <button @click="expanded = !expanded" class="w-full p-4 flex justify-between items-center text-left hover:bg-purple-50/30 dark:hover:bg-purple-900/5 transition">                     
+                        <div>                         
+                            <span class="inline-block px-2 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400 text-[10px] font-black uppercase rounded mb-1">Nota Sukses</span>                         
+                            <h3 class="font-bold text-sm text-zinc-700 dark:text-zinc-300">{{ data_get($order, 'order_number') }}</h3>                         
+                            <p class="text-xs text-zinc-400">Tanggal: {{ \Carbon\Carbon::parse(data_get($order, 'order_date'))->format('d M Y') }}</p>                     
+                        </div>                     
+                        <div class="text-right flex flex-col items-end gap-1">                         
+                            <span class="text-base font-black text-purple-600 dark:text-purple-400">+Rp {{ number_format(data_get($order, 'commission'), 0, ',', '.') }}</span>                         
+                            <x-heroicon-o-chevron-down class="w-4 h-4 text-zinc-400 transition-transform duration-300" x-bind:class="expanded ? 'rotate-180' : ''" />                     
+                        </div>                 
+                    </button>                 
+                    
+                    <div x-show="expanded" x-collapse>                     
+                        <div class="p-4 border-t border-zinc-100 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/20">                         
+                            <p class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2.5">Breakdown Item Komisi:</p>
+                            
+                            <div class="space-y-2">                             
+                                @foreach(data_get($order, 'orderItems', []) as $item)                                 
+                                    <div class="flex justify-between items-center text-xs p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-700/50 shadow-xs">                                     
+                                        <div>
+                                            <p class="font-bold text-zinc-700 dark:text-zinc-300">{{ data_get($item, 'product.name') }}</p>
+                                            <p class="text-[10px] text-zinc-400">Kuantitas: {{ data_get($item, 'qty_billed') }}x</p>
+                                        </div>
+                                        <div class="text-right">
+                                            <span class="font-semibold text-purple-500">Rp {{ number_format(data_get($item, 'subtotal', 0) * 0.01, 0, ',', '.') }}</span> 
+                                        </div>                                
+                                    </div>                             
+                                @endforeach                         
+                            </div>                         
+                        </div>                     
+                    </div>                 
+                </div>         
+            @empty             
+                <div class="text-center py-16 opacity-50">                 
+                    <x-heroicon-o-gift class="w-16 h-16 mx-auto mb-3 text-purple-400" />                 
+                    <p class="font-bold">Belum ada catatan komisi barang.</p>             
+                    <p class="text-xs text-zinc-400 mt-1">Komisi akan terhitung otomatis ketika ada transaksi selesai yang menggunakan referral Anda.</p>
+                </div>         
+            @endforelse     
+        </div>
     </div>
+
+    
 
     <footer class="mt-auto py-8 text-center px-4 shrink-0">
         <p class="text-[11px] font-bold tracking-wide text-zinc-400 dark:text-zinc-500 leading-normal uppercase">
