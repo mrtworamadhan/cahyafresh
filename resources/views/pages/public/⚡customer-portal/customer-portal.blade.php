@@ -63,12 +63,12 @@
             <button @click="activeTab = 'unpaid'"                      
                     :class="activeTab === 'unpaid' ? 'bg-white dark:bg-zinc-700 shadow text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-700'"                     
                     class="flex-1 whitespace-nowrap py-2 px-3 text-[11px] sm:text-sm font-bold rounded-lg transition-all duration-200">                 
-                Belum Lunas ({{ count($unpaidOrders) }})             
+                Tagihan ({{ count($unpaidOrders) }})             
             </button>             
             <button @click="activeTab = 'draft'"                      
                     :class="activeTab === 'draft' ? 'bg-white dark:bg-zinc-700 shadow text-amber-600 dark:text-amber-400' : 'text-zinc-500 hover:text-zinc-700'"                     
                     class="flex-1 whitespace-nowrap py-2 px-3 text-[11px] sm:text-sm font-bold rounded-lg transition-all duration-200">                 
-                PO / Disiapkan ({{ count($draftOrders) }})             
+                Disiapkan ({{ count($draftOrders) }})             
             </button>             
             <button @click="activeTab = 'paid'"                      
                     :class="activeTab === 'paid' ? 'bg-white dark:bg-zinc-700 shadow text-green-600 dark:text-green-400' : 'text-zinc-500 hover:text-zinc-700'"                     
@@ -78,7 +78,7 @@
             <button @click="activeTab = 'commission'"                      
                     :class="activeTab === 'commission' ? 'bg-white dark:bg-zinc-700 shadow text-purple-600 dark:text-purple-400' : 'text-zinc-500 hover:text-zinc-700'"                     
                     class="flex-1 whitespace-nowrap py-2 px-3 text-[11px] sm:text-sm font-bold rounded-lg transition-all duration-200">                 
-                Komisi Saya             
+                Komisi             
             </button>       
         </div>     
     </div>     
@@ -216,7 +216,7 @@
             </div>
 
             @forelse(collect($commissionOrders) as $order)             
-                <div x-data TYPE="{ expanded: false }" class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-purple-100 dark:border-purple-900/30 overflow-hidden">                 
+                <div x-data="{ expanded: false }" class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-purple-100 dark:border-purple-900/30 overflow-hidden">                 
                     <button @click="expanded = !expanded" class="w-full p-4 flex justify-between items-center text-left hover:bg-purple-50/30 dark:hover:bg-purple-900/5 transition">                     
                         <div>                         
                             <span class="inline-block px-2 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400 text-[10px] font-black uppercase rounded mb-1">Komisi Masuk</span>                         
