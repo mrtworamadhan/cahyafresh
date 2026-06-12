@@ -217,7 +217,12 @@ new #[Layout('layouts::pos')] class extends Component
 
         return [
             'wallets' => Wallet::where('business_id', $businessId)->where('is_active', true)->get(),
-            'unpaidOrders' => Order::with('customer')->where('business_id', $businessId)->whereIn('payment_status', ['unpaid', 'partial'])->latest()->get(),
+            'unpaidOrders' => Order::with('customer')
+                ->where('business_id', $businessId)
+                ->where('status', 'completed') 
+                ->whereIn('payment_status', ['unpaid', 'partial'])
+                ->latest()
+                ->get(),
             'unpaidPurchases' => Purchase::with('supplier')->where('business_id', $businessId)->where('status', 'unpaid')->latest()->get(),
             'todaySales' => $todaySales,
             'todayExpenses' => $todayExpenses,
