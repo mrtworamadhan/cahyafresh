@@ -39,21 +39,44 @@
     <!-- ==========================================
          HALAMAN 1 : INVOICE 
          ========================================== -->
-    <div class="text-center">
-        <div style="font-size: 16pt; font-weight: bold;">{{ strtoupper($order->business->name) }}</div>
-        <div>{{ $order->business->address }} | Telp: {{ $order->business->phone ?? '-' }}</div>
-    </div>
+    <table style="width: 100%; border-collapse: collapse; border-bottom: 2px solid {{ $color ?? '#333' }}; padding-bottom: 12px; margin-bottom: 15px;">
+        <tr>
+            <td style="width: 30%; text-align: left; vertical-align: middle;">
+                @if($order->business && $order->business->logo)
+                    <img src="{{ asset('storage/' . $order->business->logo) }}" 
+                        alt="Logo {{ $order->business->name }}" 
+                        style="max-height: 55px; max-width: 100%; object-fit: contain;">
+                @else
+                    <div style="font-size: 14pt; font-weight: 900; letter-spacing: 1px; color: #bbb;">
+                        {{ substr($order->business->name, 0, 3) }}
+                    </div>
+                @endif
+            </td>
+            
+            <td style="width: 70%; text-align: right; vertical-align: middle; line-height: 1.4;">
+                <div style="font-size: 16pt; font-weight: 900; color: #111; letter-spacing: 0.5px;">
+                    {{ strtoupper($order->business->name) }}
+                </div>
+                <div style="font-size: 9pt; color: #333; margin-top: 3px;">
+                    {{ $order->business->address }}
+                </div>
+                <div style="font-size: 9pt; color: #111; font-weight: bold; margin-top: 1px;">
+                    Telp: {{ $order->business->phone ?? '-' }}
+                </div>
+            </td>
+        </tr>
+    </table>
     
     <div style="margin-top: 10px; border-bottom: 1px dashed #000; padding-bottom: 5px;">
         <table style="margin-top: 0;">
             <tr>
                 <td width="50%">
                     <strong>NOTA : #{{ $order->order_number }}</strong><br>
-                    TGL  : {{ \Carbon\Carbon::parse($order->order_date)->format('d/m/Y H:i') }}
+                    TGL  : {{ \Carbon\Carbon::parse($order->delivery_date)->format('d/m/Y') }}
                 </td>
                 <td width="50%" class="text-right">
-                    <strong>KLIEN:</strong> {{ $order->customer->name ?? 'Umum' }}<br>
-                    STATUS: {{ $order->payment_status === 'paid' ? 'LUNAS' : 'PIUTANG' }}
+                    <strong>KEPADA:</strong> {{ $order->customer->name ?? 'Umum' }}<br>
+                    STATUS: '{{ $order->payment_status === 'paid' ? 'LUNAS' : 'PIUTANG' }}'
                 </td>
             </tr>
         </table>
@@ -165,37 +188,54 @@
          ========================================== -->
     <div class="page-break"></div>
 
-    <div class="text-center">
-        <div style="font-size: 16pt; font-weight: bold;">{{ strtoupper($order->business->name) }}</div>
-        <div>{{ $order->business->address }} | Telp: {{ $order->business->phone ?? '-' }}</div>
-    </div>
+    <table style="width: 100%; border-collapse: collapse; border-bottom: 2px solid {{ $color ?? '#333' }}; padding-bottom: 12px; margin-bottom: 15px;">
+        <tr>
+            <td style="width: 30%; text-align: left; vertical-align: middle;">
+                @if($order->business && $order->business->logo)
+                    <img src="{{ asset('storage/' . $order->business->logo) }}" 
+                        alt="Logo {{ $order->business->name }}" 
+                        style="max-height: 55px; max-width: 100%; object-fit: contain;">
+                @else
+                    <div style="font-size: 14pt; font-weight: 900; letter-spacing: 1px; color: #bbb;">
+                        {{ substr($order->business->name, 0, 3) }}
+                    </div>
+                @endif
+            </td>
+            
+            <td style="width: 70%; text-align: right; vertical-align: middle; line-height: 1.4;">
+                <div style="font-size: 16pt; font-weight: 900; color: #111; letter-spacing: 0.5px;">
+                    {{ strtoupper($order->business->name) }}
+                </div>
+                <div style="font-size: 9pt; color: #333; margin-top: 3px;">
+                    {{ $order->business->address }}
+                </div>
+                <div style="font-size: 9pt; color: #111; font-weight: bold; margin-top: 1px;">
+                    Telp: {{ $order->business->phone ?? '-' }}
+                </div>
+            </td>
+        </tr>
+    </table>
     
     <div class="text-center" style="margin: 10px 0;">
         <span class="header-title">SURAT JALAN</span><br>
-        <span>NO: DO-{{ $order->order_number }}</span>
+        <span>NO: DO-{{ $order->order_number }} | TGL: {{ \Carbon\Carbon::parse($order->delivery_date)->format('d/m/Y') }}</span>
     </div>
 
     <table>
         <tr>
             <td width="50%" style="border: 1px solid #000; padding: 5px;">
                 <strong>PENGIRIM:</strong><br>{{ $order->business->name }}
-            </td>
-            <td width="50%" style="border: 1px solid #000; padding: 5px;">
-                <strong>PENERIMA:</strong><br>{{ $order->customer->name }}<br>{{ $order->customer->address }}
-            </td>
-        </tr>
-    </table>
-
-    <table style="margin-top: 10px; margin-bottom: 10px;">
-        <tr>
-            <td style="border: 1px solid #000; padding: 5px;">
-                <strong>INFORMASI PENGIRIMAN:</strong><br>
+                <br>
+                
                 @if($order->delivery && $order->delivery->courier)
                     Kurir: {{ $order->delivery->courier->name }} 
                     {{ $order->delivery->courier->vehicle_plate ? '| Plat: ' . $order->delivery->courier->vehicle_plate : '' }}
                 @else
                     Kurir: -
                 @endif
+            </td>
+            <td width="50%" style="border: 1px solid #000; padding: 5px;">
+                <strong>PENERIMA:</strong><br>{{ $order->customer->name }}<br>{{ $order->customer->address }}
             </td>
         </tr>
     </table>
@@ -215,7 +255,7 @@
                 <td class="text-center">{{ $index + 1 }}</td>
                 <td>{{ $item->product->name }}</td>
                 <td class="text-center">{{ $item->qty_billed }}</td>
-                <td class="text-center">{{ $item->productUnit?->unit_name ?? 'Pcs' }}</td>
+                <td class="text-center">{{ $item->productUnit?->unit_name ?? '' }}</td>
             </tr>
             @if($item->qty_bonus > 0)
             <tr>
