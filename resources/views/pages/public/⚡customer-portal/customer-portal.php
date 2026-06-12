@@ -15,6 +15,7 @@ new #[Title('Customer Portal - Cahya Fresh')] class extends Component
     public $paidOrders = [];
     public $draftOrders = []; 
     public $commissionHistory = []; 
+    public $commissionOrders = []; 
     public $wallets = [];
     public $totalUnpaid = 0;
 
@@ -79,7 +80,24 @@ new #[Title('Customer Portal - Cahya Fresh')] class extends Component
             ]);
         }
 
-        $this->commissionHistory = $combinedHistory->sortByDesc('date')->values()->all();
+        // $this->commissionHistory = $combinedHistory->sortByDesc('date')->values()->all();
+
+        $this->commissionOrders = Order::with(['orderItems.product'])
+            ->where('commission_recipient_id', $this->customer->id)
+            ->where('status', 'completed') // Hanya ambil komisi dari orderan yang sudah sukses/selesai
+            ->where('commission_amount', '>', 0)
+            ->latest()
+            ->get();
+
+        foreach ($this->commissionOrders as $order) {
+            $combinedHistory->push([
+                'date' => $order->order_date,
+                'type' => 'in', 
+                'title' => 'Komisi Masuk (Nota #' . $order->order_number . ')',
+                'amount' => $order->commission_amount, 
+                'note' => $order->commission_note ?? 'Bonus pencatatan pesanan',
+            ]);
+        }
         
         $this->totalUnpaid = collect($this->unpaidOrders)->sum('total_amount');
         $this->totalPiutang = collect($this->unpaidOrders)->sum('total_amount');
