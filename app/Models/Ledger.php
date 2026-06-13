@@ -22,6 +22,11 @@ class Ledger extends Model
         'reference_id'
     ];
 
+    protected $casts = [
+        'transaction_date' => 'datetime',
+        
+    ];
+
     public function business(): BelongsTo
     {
         return $this->belongsTo(Business::class);
