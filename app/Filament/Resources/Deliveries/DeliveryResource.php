@@ -27,6 +27,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use UnitEnum;
 
 class DeliveryResource extends Resource
@@ -226,34 +227,42 @@ class DeliveryResource extends Resource
                             ->required(),
                     ])
                     ->action(function ($record, array $data) {
-                        $kategoriOngkir = \App\Models\FinanceCategory::where('code', 'OP_SHIPPING')->first();
+                        
+                        // BUNGKUS TRANSAKSI AGAR INTEGRITAS DATA AMAN
+                        DB::transaction(function () use ($record, $data) {
+                            
+                            // PERBAIKAN FATAL: Arahkan ke LIA_SHIPPING_PAID agar tidak double counting beban
+                            $kategoriPelunasan = \App\Models\FinanceCategory::withoutGlobalScopes()
+                                ->where('code', 'LIA_SHIPPING_PAID')
+                                ->first();
 
-                        \App\Models\Ledger::create([
-                            'business_id' => $record->business_id,
-                            'wallet_id' => $data['wallet_id'],
-                            'finance_category_id' => $kategoriOngkir?->id,
-                            'transaction_date' => now(),
-                            'description' => "Pembayaran Ekspedisi/Kurir (" . ($record->courier?->name ?? 'Internal') . ") Nota: " . $record->order->order_number,
-                            'type' => 'out', 
-                            'amount' => $record->shipping_cost_actual,
-                            'reference_type' => Delivery::class,
-                            'reference_id' => $record->id,
-                        ]);
+                            \App\Models\Ledger::create([
+                                'business_id' => $record->business_id,
+                                'wallet_id' => $data['wallet_id'],
+                                'finance_category_id' => $kategoriPelunasan?->id,
+                                'transaction_date' => now(),
+                                'description' => "Pelunasan Ongkir Kurir (" . ($record->courier?->name ?? 'Internal') . ") Nota: " . $record->order->order_number,
+                                'type' => 'out', 
+                                'amount' => $record->shipping_cost_actual,
+                                'reference_type' => Delivery::class,
+                                'reference_id' => $record->id,
+                            ]);
 
-                        $wallet = \App\Models\Wallet::find($data['wallet_id']);
-                        if ($wallet) {
-                            $wallet->decrement('balance', $record->shipping_cost_actual);
-                        }
+                            // Kurangi fisik uang di dompet/bank toko
+                            $wallet = \App\Models\Wallet::find($data['wallet_id']);
+                            if ($wallet) {
+                                $wallet->decrement('balance', $record->shipping_cost_actual);
+                            }
 
-                        $record->update(['is_paid_to_courier' => true]);
+                            // Kunci status pembayaran kurir
+                            $record->update(['is_paid_to_courier' => true]);
+                        });
 
                         Notification::make()
                             ->title('Pembayaran ke Kurir Berhasil Dirilis')
                             ->success()
                             ->send();
                     }),
-                // EditAction::make(),
-                // DeleteAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -275,36 +284,46 @@ class DeliveryResource extends Resource
                             $totalPaid = 0;
                             $count = 0;
 
-                            $kategoriOngkir = \App\Models\FinanceCategory::where('code', 'OP_SHIPPING')->first();
+                            // AMANKAN BULK PROCESS LEWAT DATABASE TRANSACTION TUNGGAL
+                            DB::transaction(function () use ($records, $data, &$totalPaid, &$count) {
+                                
+                                // PERBAIKAN FATAL: Ganti COA ke tipe pelunasan liabilitas massal
+                                $kategoriPelunasan = \App\Models\FinanceCategory::withoutGlobalScopes()
+                                    ->where('code', 'LIA_SHIPPING_PAID')
+                                    ->first();
 
-                            foreach ($records as $record) {
-                                if (!$record->is_paid_to_courier && $record->shipping_cost_actual > 0) {
-                                    
-                                    \App\Models\Ledger::create([
-                                        'business_id' => $record->business_id,
-                                        'wallet_id' => $data['wallet_id'],
-                                        'finance_category_id' => $kategoriOngkir?->id, 
-                                        'transaction_date' => now(),
-                                        'description' => "Pelunasan Ekspedisi (" . ($record->courier?->name ?? 'Internal') . ") Nota: " . $record->order->order_number,
-                                        'type' => 'out',
-                                        'amount' => $record->shipping_cost_actual,
-                                        'reference_type' => Delivery::class, 
-                                        'reference_id' => $record->id,
-                                    ]);
+                                foreach ($records as $record) {
+                                    if (!$record->is_paid_to_courier && $record->shipping_cost_actual > 0) {
+                                        
+                                        \App\Models\Ledger::create([
+                                            'business_id' => $record->business_id,
+                                            'wallet_id' => $data['wallet_id'],
+                                            'finance_category_id' => $kategoriPelunasan?->id, 
+                                            'transaction_date' => now(),
+                                            'description' => "Pelunasan Ongkir Massal (" . ($record->courier?->name ?? 'Internal') . ") Nota: " . $record->order->order_number,
+                                            'type' => 'out',
+                                            'amount' => $record->shipping_cost_actual,
+                                            'reference_type' => Delivery::class, 
+                                            'reference_id' => $record->id,
+                                        ]);
 
-                                    $record->update(['is_paid_to_courier' => true]);
-                                    
-                                    $totalPaid += $record->shipping_cost_actual;
-                                    $count++;
+                                        $record->update(['is_paid_to_courier' => true]);
+                                        
+                                        $totalPaid += $record->shipping_cost_actual;
+                                        $count++;
+                                    }
                                 }
-                            }
+
+                                // Eksekusi pemotongan saldo kumulatif satu kali di akhir loop
+                                if ($totalPaid > 0) {
+                                    $wallet = \App\Models\Wallet::find($data['wallet_id']);
+                                    if ($wallet) {
+                                        $wallet->decrement('balance', $totalPaid);
+                                    }
+                                }
+                            });
 
                             if ($totalPaid > 0) {
-                                $wallet = \App\Models\Wallet::find($data['wallet_id']);
-                                if ($wallet) {
-                                    $wallet->decrement('balance', $totalPaid);
-                                }
-
                                 Notification::make()
                                     ->title("Berhasil melunasi $count tagihan kurir (Total: Rp " . number_format($totalPaid, 0, ',', '.') . ")")
                                     ->success()

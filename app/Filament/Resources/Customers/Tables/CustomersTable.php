@@ -13,6 +13,7 @@ use Filament\Notifications\Notification;
 use Filament\Support\RawJs;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\DB;
 
 class CustomersTable
 {
@@ -56,6 +57,7 @@ class CustomersTable
                         return redirect()->away($waLink);
                     })
                     ->visible(fn ($record) => !empty($record->phone)),
+                    
                 Action::make('terima_deposit')
                     ->label('Terima Deposit')
                     ->icon('heroicon-o-arrow-down-left')
@@ -140,28 +142,36 @@ class CustomersTable
                             return;
                         }
 
-                        $kategoriKomisi = \App\Models\FinanceCategory::withoutGlobalScopes()->where('code', 'OP_COMMISSION')->first();
+                        // BUNGKUS TRANSAKSI AGAR DATA SELALU SINKRON & AMAN
+                        DB::transaction(function () use ($data, $record, $cleanAmount) {
+                            
+                            // PERBAIKAN FATAL: Mengalihkan kode ke LIA_COMMISSION_PAID agar tidak Double Counting di Laba Rugi
+                            $kategoriPencairan = \App\Models\FinanceCategory::withoutGlobalScopes()
+                                ->where('code', 'LIA_COMMISSION_PAID')
+                                ->first();
 
-                        Ledger::create([
-                            'business_id' => $record->business_id,
-                            'wallet_id' => $data['wallet_id'],
-                            'finance_category_id' => $kategoriKomisi?->id,
-                            'transaction_date' => now(),
-                            'description' => 'Pencairan Komisi: ' . ($data['notes'] ?: 'Referral'),
-                            'type' => 'out', 
-                            'amount' => $cleanAmount,
-                            'contact_type' => \App\Models\Customer::class,
-                            'contact_id' => $record->id,
-                        ]);
-                        
-                        $record->commission_balance -= $cleanAmount;
-                        $record->save();
+                            // 1. Buat Slip Jurnal Keluar Dompet Tunai / Bank
+                            Ledger::create([
+                                'business_id' => $record->business_id,
+                                'wallet_id' => $data['wallet_id'],
+                                'finance_category_id' => $kategoriPencairan?->id,
+                                'transaction_date' => now(),
+                                'description' => 'Pencairan Komisi: ' . ($data['notes'] ?: 'Referral'),
+                                'type' => 'out', 
+                                'amount' => $cleanAmount,
+                                'contact_type' => \App\Models\Customer::class,
+                                'contact_id' => $record->id,
+                            ]);
+                            
+                            // 2. Potong Sisa Saldo Komisi Gantung di Akun Customer (Mengurangi Hutang Neraca)
+                            $record->decrement('commission_balance', $cleanAmount);
 
-                        $wallet = \App\Models\Wallet::find($data['wallet_id']);
-                        if ($wallet) {
-                            $wallet->balance -= $cleanAmount;
-                            $wallet->save();
-                        }
+                            // 3. Potong Fisik Saldo Uang Tunai di Rekening/Dompet Toko (Mengurangi Aktiva Neraca)
+                            $wallet = \App\Models\Wallet::find($data['wallet_id']);
+                            if ($wallet) {
+                                $wallet->decrement('balance', $cleanAmount);
+                            }
+                        });
 
                         Notification::make()->title('Komisi Berhasil Dicairkan!')->success()->send();
                     }),

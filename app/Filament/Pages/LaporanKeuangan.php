@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\Customer;
 use App\Models\Supplier;
 use App\Models\FinanceCategory;
+use App\Models\Delivery; // <--- SUNTIKAN MODEL UNTUK TRACKING HUTANG ONGIR
 
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
@@ -77,8 +78,6 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                 ->icon('heroicon-o-lock-closed')
                 ->color('danger')
                 ->requiresConfirmation()
-                ->modalHeading('Konfirmasi Tutup Buku')
-                ->modalDescription('Tindakan ini akan mengunci/menyimpan kondisi Neraca, Piutang, Hutang, dan Laba/Rugi saat ini secara permanen ke dalam Arsip. Yakin ingin melanjutkan?')
                 ->action(function () {
                     $businessId = Filament::getTenant()?->id ?? auth()->user()->businesses()->first()?->id;
                     $liveData = $this->getLiveData(); 
@@ -90,12 +89,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                         'snapshot_data' => $liveData, 
                     ]);
 
-                    Notification::make()
-                        ->title('Tutup Buku Berhasil!')
-                        ->body('Laporan bulan ini telah dikunci ke dalam arsip.')
-                        ->success()
-                        ->send();
-                        
+                    Notification::make()->title('Tutup Buku Berhasil!')->success()->send();
                     $this->form->fill(['report_mode' => 'live']); 
                 }),
         ];
@@ -104,11 +98,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
     public function form(Schema $form): Schema
     {
         $businessId = Filament::getTenant()?->id ?? auth()->user()->businesses()->first()?->id;
-        
-        $arsipOptions = MonthlyClosing::where('business_id', $businessId)
-            ->orderBy('created_at', 'desc')
-            ->pluck('period_name', 'id')
-            ->toArray();
+        $arsipOptions = MonthlyClosing::where('business_id', $businessId)->orderBy('created_at', 'desc')->pluck('period_name', 'id')->toArray();
 
         return $form
             ->schema([
@@ -120,14 +110,8 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
 
                 Grid::make(2)
                     ->schema([
-                        DatePicker::make('start_date')
-                            ->label('Dari Tanggal')
-                            ->live()
-                            ->required(),
-                        DatePicker::make('end_date')
-                            ->label('Sampai Tanggal')
-                            ->live()
-                            ->required(),
+                        DatePicker::make('start_date')->label('Dari Tanggal')->live()->required(),
+                        DatePicker::make('end_date')->label('Sampai Tanggal')->live()->required(),
                     ])
                     ->visible(fn (Get $get) => $get('report_mode') === 'live'), 
             ])
@@ -151,7 +135,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                     ->schema([
                                         TextEntry::make('omzet_barang')->label('Pendapatan Penjualan')->money('IDR')->color('success'),
                                         TextEntry::make('omzet_ongkir')->label('Pendapatan Ongkir')->money('IDR')->color('success'),
-                                        TextEntry::make('hpp')->label('Harga Pokok Penjualan (HPP)')->money('IDR')->color('danger')->helperText('Termasuk modal dari barang bonus/gratis.'),
+                                        TextEntry::make('hpp')->label('Harga Pokok Penjualan (HPP)')->money('IDR')->color('danger'),
                                         TextEntry::make('laba_kotor')->label('Laba Kotor (Gross Profit)')->money('IDR')->weight('black')->size(TextSize::Large),
                                     ])->columns(2),
 
@@ -224,13 +208,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                         Tab::make('Piutang Pelanggan')
                             ->icon('heroicon-o-arrow-right-end-on-rectangle')
                             ->schema([
-                                TextEntry::make('total_piutang')
-                                    ->label('TOTAL PIUTANG KESELURUHAN')
-                                    ->money('IDR')
-                                    ->weight('black')
-                                    ->color('danger')
-                                    ->size(TextSize::Large),
-                                    
+                                TextEntry::make('total_piutang')->label('TOTAL PIUTANG KESELURUHAN')->money('IDR')->weight('black')->color('danger')->size(TextSize::Large),
                                 RepeatableEntry::make('piutang_list')
                                     ->label('Daftar Rincian Piutang')
                                     ->schema([
@@ -247,13 +225,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                         Tab::make('Hutang Supplier')
                             ->icon('heroicon-o-arrow-left-start-on-rectangle')
                             ->schema([
-                                TextEntry::make('total_hutang_usaha')
-                                    ->label('TOTAL HUTANG KESELURUHAN')
-                                    ->money('IDR')
-                                    ->weight('black')
-                                    ->color('danger')
-                                    ->size(TextSize::Large),
-
+                                TextEntry::make('total_hutang_usaha')->label('TOTAL HUTANG KESELURUHAN')->money('IDR')->weight('black')->color('danger')->size(TextSize::Large),
                                 RepeatableEntry::make('hutang_list')
                                     ->label('Daftar Rincian Hutang')
                                     ->schema([
@@ -265,7 +237,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                             ]),
 
                         // ==========================================
-                        // TAB 5: NERACA (SUDAH DIPECAH UTUH - TIDAK GLONDONGAN)
+                        // TAB 5: NERACA
                         // ==========================================
                         Tab::make('Neraca (Balance Sheet)')
                             ->icon('heroicon-o-scale')
@@ -284,19 +256,22 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                     Section::make('PASIVA (Kewajiban & Struktur Ekuitas)')
                                         ->icon('heroicon-o-scale')
                                         ->schema([
-                                            // 1. Kelompok Kewajiban (Liabilitas)
                                             TextEntry::make('hutang_usaha_neraca')->label('Hutang Usaha (Ke Supplier)')->money('IDR')->color('danger'),
                                             TextEntry::make('deposit_pel')->label('Titipan Deposit Konsumen')->money('IDR')->color('danger'),
                                             TextEntry::make('hutang_komisi')->label('Hutang Komisi & Referral')->money('IDR')->color('danger'),
                                             
-                                            // 2. PERBAIKAN: Kelompok Ekuitas Dipecah Resmi Sesuai Request Lu
+                                            // PERBAIKAN TAMPILAN: Menampilkan Akun Hutang Kurir di Layar Pasiva Neraca
+                                            TextEntry::make('hutang_ongkir')->label('Hutang Ongkir & Kurir (Belum Rilis)')->money('IDR')->color('danger'),
+                                            
                                             TextEntry::make('modal_awal')->label('Modal Awal / Suntikan Disetor')->money('IDR')->color('info'),
                                             TextEntry::make('laba_berjalan')->label('Laba Berjalan (Periode Ini)')->money('IDR')->color('success'),
                                             TextEntry::make('prive')->label('Prive (Tarik Modal Pribadi)')->money('IDR')->color('danger'),
-                                            TextEntry::make('penyesuaian_neraca')->label('Selisih Penyesuaian Akuntansi')->money('IDR')->color('warning')->helperText('Selisih transaksi non-kas/backdate.'),
                                             
                                             TextEntry::make('total_pasiva')->label('TOTAL PASIVA')->money('IDR')->weight('black')->color('primary')->size(TextSize::Large),
                                         ])->columnSpan(1),
+                                        
+                                    TextEntry::make('penyesuaian_neraca')->label('Selisih Penyesuaian Akuntansi')->money('IDR')->color('warning')->helperText('Selisih transaksi non-kas/backdate.'),
+                                            
                                 ])
                             ]),
                             
@@ -309,53 +284,20 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                 Grid::make(3)->schema([
                                     Section::make('Margin Laba Bersih')
                                         ->schema([
-                                            TextEntry::make('profit_margin')
-                                                ->label('Persentase')
-                                                ->formatStateUsing(fn ($state) => number_format($state, 1) . '%')
-                                                ->size(TextSize::Large)
-                                                ->weight('black'),
-                                            TextEntry::make('status_margin')
-                                                ->label('Status Kesehatan')
-                                                ->badge()
-                                                ->color(fn ($state) => match ($state) {
-                                                    'Sangat Sehat' => 'success',
-                                                    'Kurang Ideal' => 'warning',
-                                                    default => 'danger',
-                                                }),
+                                            TextEntry::make('profit_margin')->label('Persentase')->formatStateUsing(fn ($state) => number_format($state, 1) . '%')->size(TextSize::Large)->weight('black'),
+                                            TextEntry::make('status_margin')->label('Status Kesehatan')->badge()->color(fn ($state) => match ($state) { 'Sangat Sehat' => 'success', 'Kurang Ideal' => 'warning', default => 'danger' }),
                                         ])->columnSpan(1),
 
                                     Section::make('Rasio Likuiditas')
                                         ->schema([
-                                            TextEntry::make('current_ratio')
-                                                ->label('Skor Rasio')
-                                                ->formatStateUsing(fn ($state) => number_format($state, 2) . ' x')
-                                                ->size(TextSize::Large)
-                                                ->weight('black'),
-                                            TextEntry::make('status_likuiditas')
-                                                ->label('Status Kesehatan')
-                                                ->badge()
-                                                ->color(fn ($state) => match ($state) {
-                                                    'Sangat Aman' => 'success',
-                                                    'Aman' => 'info',
-                                                    default => 'danger',
-                                                }),
+                                            TextEntry::make('current_ratio')->label('Skor Rasio')->formatStateUsing(fn ($state) => number_format($state, 2) . ' x')->size(TextSize::Large)->weight('black'),
+                                            TextEntry::make('status_likuiditas')->label('Status Kesehatan')->badge()->color(fn ($state) => match ($state) { 'Sangat Aman' => 'success', 'Aman' => 'info', default => 'danger' }),
                                         ])->columnSpan(1),
 
                                     Section::make('Rasio Hutang')
                                         ->schema([
-                                            TextEntry::make('debt_ratio')
-                                                ->label('Persentase')
-                                                ->formatStateUsing(fn ($state) => number_format($state, 1) . '%')
-                                                ->size(TextSize::Large)
-                                                ->weight('black'),
-                                            TextEntry::make('status_hutang')
-                                                ->label('Status Kesehatan')
-                                                ->badge()
-                                                ->color(fn ($state) => match ($state) {
-                                                    'Rendah Risiko' => 'success',
-                                                    'Risiko Sedang' => 'warning',
-                                                    default => 'danger',
-                                                }),
+                                            TextEntry::make('debt_ratio')->label('Persentase')->formatStateUsing(fn ($state) => number_format($state, 1) . '%')->size(TextSize::Large)->weight('black'),
+                                            TextEntry::make('status_hutang')->label('Status Kesehatan')->badge()->color(fn ($state) => match ($state) { 'Rendah Risiko' => 'success', 'Risiko Sedang' => 'warning', default => 'danger' }),
                                         ])->columnSpan(1),
                                 ])
                             ]),
@@ -366,11 +308,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
     protected function getReportData(): array
     {
         $mode = $this->data['report_mode'] ?? 'live';
-
-        if ($mode === 'live') {
-            return $this->getLiveData();
-        }
-
+        if ($mode === 'live') return $this->getLiveData();
         $arsip = MonthlyClosing::find($mode);
         return $arsip ? $arsip->snapshot_data : $this->getLiveData();
     }
@@ -383,114 +321,87 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $endDate = ($this->data['end_date'] ?? now()->format('Y-m-d')) . ' 23:59:59';
 
         // ==============================================================
-        // --- A. LABA RUGI ---
+        // --- A. LABA RUGI PERIODIK ---
         // ==============================================================
-        $omzetBarang = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('created_at', [$startDate, $endDate])->sum(DB::raw('total_amount - shipping_fee_billed'));
-        $omzetOngkir = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('created_at', [$startDate, $endDate])->sum('shipping_fee_billed');
-        $bebanOngkir = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('created_at', [$startDate, $endDate])->sum('shipping_cost_actual');
+        $omzetBarang = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('updated_at', [$startDate, $endDate])->sum(DB::raw('total_amount - shipping_fee_billed'));
+        $omzetOngkir = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('updated_at', [$startDate, $endDate])->sum('shipping_fee_billed');
+        
+        $shippingCategory = FinanceCategory::withoutGlobalScopes()->where('code', 'OP_SHIPPING')->first();
+        $bebanOngkir = Ledger::where('business_id', $businessId)
+            ->where('finance_category_id', $shippingCategory?->id)
+            ->whereBetween('transaction_date', [$startDate, $endDate])
+            ->sum('amount');
 
         $hpp = OrderItem::whereHas('order', function($q) use ($businessId, $startDate, $endDate) {
-            $q->where('business_id', $businessId)->where('status', 'completed')->whereBetween('created_at', [$startDate, $endDate]);
+            $q->where('business_id', $businessId)->where('status', 'completed')->whereBetween('updated_at', [$startDate, $endDate]);
         })->sum(DB::raw('base_price * (qty_billed + qty_bonus)'));
 
         $queryBeban = Ledger::query()
             ->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
             ->where('ledgers.business_id', $businessId)
             ->where('ledgers.type', 'out')
-            ->whereNotIn('finance_categories.code', ['EXP_PURCHASE', 'LIA_AP', 'ASSET_DEP_SUPPLIER', 'OP_SHIPPING'])
-            ->whereBetween('ledgers.transaction_date', [$startDate, $endDate])
-            ->select(
-                'finance_categories.name as category_name', 
-                DB::raw('SUM(ledgers.amount) as total')
-            )
-            ->groupBy('finance_categories.id', 'finance_categories.name')
-            ->get();
-
-        $bebanList = [];
-        $totalBeban = 0;
-
-        if ($bebanOngkir > 0) {
-            $bebanList[] = [
-                'name' => 'Beban Pengiriman & Ekspedisi (Riil)',
-                'amount' => (float) $bebanOngkir
-            ];
-            $totalBeban += $bebanOngkir;
-        }
-
-        foreach ($queryBeban as $beban) {
-            $bebanList[] = [
-                'name' => $beban->category_name ?? 'Beban Lainnya', 
-                'amount' => (float) $beban->total
-            ];
-            $totalBeban += $beban->total;
-        }
-
-        $labaKotor = ($omzetBarang + $omzetOngkir) - $hpp;
-        $labaBersih = $labaKotor - $totalBeban;
-
-        // ==============================================================
-        // --- B. ARUS KAS (CASHFLOW MURNI COA JOIN) ---
-        // ==============================================================
-        $queryKasMasuk = Ledger::query()
-            ->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
-            ->where('ledgers.business_id', $businessId)
-            ->where('ledgers.type', 'in')
-            ->whereNotNull('ledgers.wallet_id') 
+            ->whereNotIn('finance_categories.code', [
+                'EXP_PURCHASE', 'LIA_AP', 'ASSET_DEP_SUPPLIER', 'OP_SHIPPING',
+                'LIA_COMMISSION_PAID', 'LIA_SHIPPING_PAID', 'LIA_CSR_ZAKAT_PAID', 'EQ_MODAL', 'EQ_PRIVE'
+            ])
             ->whereBetween('ledgers.transaction_date', [$startDate, $endDate])
             ->select('finance_categories.name as category_name', DB::raw('SUM(ledgers.amount) as total'))
             ->groupBy('finance_categories.id', 'finance_categories.name')
             ->get();
+
+        $bebanList = []; $totalBeban = 0;
+        if ($bebanOngkir > 0) {
+            $bebanList[] = ['name' => 'Beban Pengiriman & Ekspedisi (Riil)', 'amount' => (float) $bebanOngkir];
+            $totalBeban += $bebanOngkir;
+        }
+        foreach ($queryBeban as $beban) {
+            $bebanList[] = ['name' => $beban->category_name ?? 'Beban Lainnya', 'amount' => (float) $beban->total];
+            $totalBeban += $beban->total;
+        }
+
+        $labaKotor = ($omzetBarang + $omzetOngkir) - $hpp;
+        $labaBersihPeriodik = $labaKotor - $totalBeban;
+
+        // ==============================================================
+        // --- B. ARUS KAS PERIODIK ---
+        // ==============================================================
+        $queryKasMasuk = Ledger::query()
+            ->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
+            ->where('ledgers.business_id', $businessId)->where('ledgers.type', 'in')->whereNotNull('ledgers.wallet_id') 
+            ->whereBetween('ledgers.transaction_date', [$startDate, $endDate])
+            ->select('finance_categories.name as category_name', DB::raw('SUM(ledgers.amount) as total'))
+            ->groupBy('finance_categories.id', 'finance_categories.name')->get();
             
-        $kasMasukList = [];
-        $totalKasMasuk = 0;
+        $kasMasukList = []; $totalKasMasuk = 0;
         foreach ($queryKasMasuk as $kasMas) {
-            $kasMasukList[] = [
-                'name' => $kasMas->category_name ?? 'Pemasukan Lainnya', 
-                'amount' => (float) $kasMas->total
-            ];
+            $kasMasukList[] = ['name' => $kasMas->category_name ?? 'Pemasukan Lainnya', 'amount' => (float) $kasMas->total];
             $totalKasMasuk += $kasMas->total;
         }
 
         $queryKasKeluar = Ledger::query()
             ->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
-            ->where('ledgers.business_id', $businessId)
-            ->where('ledgers.type', 'out')
-            ->whereNotNull('ledgers.wallet_id') 
+            ->where('ledgers.business_id', $businessId)->where('ledgers.type', 'out')->whereNotNull('ledgers.wallet_id') 
             ->whereBetween('ledgers.transaction_date', [$startDate, $endDate])
             ->select('finance_categories.name as category_name', DB::raw('SUM(ledgers.amount) as total'))
-            ->groupBy('finance_categories.id', 'finance_categories.name')
-            ->get();
+            ->groupBy('finance_categories.id', 'finance_categories.name')->get();
             
-        $kasKeluarList = [];
-        $totalKasKeluar = 0;
+        $kasKeluarList = []; $totalKasKeluar = 0;
         foreach ($queryKasKeluar as $kasKel) {
-            $kasKeluarList[] = [
-                'name' => $kasKel->category_name ?? 'Pengeluaran Lainnya', 
-                'amount' => (float) $kasKel->total
-            ];
+            $kasKeluarList[] = ['name' => $kasKel->category_name ?? 'Pengeluaran Lainnya', 'amount' => (float) $kasKel->total];
             $totalKasKeluar += $kasKel->total;
         }
-
         $netCashflow = $totalKasMasuk - $totalKasKeluar;
 
         // ==============================================================
         // --- C. PIUTANG & HUTANG ---
         // ==============================================================
-        $piutangQuery = Order::with('customer')
-            ->where('business_id', $businessId)
-            ->where('status', 'completed')
-            ->whereIn('payment_status', ['unpaid', 'partial'])
-            ->get();
-
-        $piutangList = [];
-        $totalPiutang = 0;
-
+        $piutangQuery = Order::with('customer')->where('business_id', $businessId)->where('status', 'completed')->whereIn('payment_status', ['unpaid', 'partial'])->get();
+        $piutangList = []; $totalPiutang = 0;
         foreach ($piutangQuery as $order) {
             if ($order->remaining_balance > 0) { 
                 $piutangList[] = [
                     'date' => \Carbon\Carbon::parse($order->delivery_date)->format('d M Y'), 
-                    'order_number' => $order->order_number, 
-                    'customer' => $order->customer->name ?? 'Umum', 
+                    'order_number' => $order->order_number, 'customer' => $order->customer->name ?? 'Umum', 
                     'remaining_balance' => (float) $order->remaining_balance
                 ];
                 $totalPiutang += $order->remaining_balance;
@@ -498,14 +409,12 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         }
 
         $hutangQuery = Purchase::with('supplier')->where('business_id', $businessId)->whereIn('status', ['unpaid', 'partial'])->get();
-        $hutangList = [];
-        $totalHutang = 0;
+        $hutangList = []; $totalHutang = 0;
         foreach ($hutangQuery as $purchase) {
             if ($purchase->remaining_balance > 0) {
                 $hutangList[] = [
                     'date' => \Carbon\Carbon::parse($purchase->purchase_date)->format('d M Y'), 
-                    'invoice_number' => $purchase->invoice_number, 
-                    'supplier' => $purchase->supplier->name ?? 'Umum', 
+                    'invoice_number' => $purchase->invoice_number, 'supplier' => $purchase->supplier->name ?? 'Umum', 
                     'remaining_balance' => (float) $purchase->remaining_balance
                 ];
                 $totalHutang += $purchase->remaining_balance;
@@ -513,7 +422,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         }
 
         // ==============================================================
-        // --- D. NERACA & PECAHAN EKUITAS ---
+        // --- D. NERACA SAKRAL (KUMULATIF SEUMUR HIDUP HINGGA END_DATE) ---
         // ==============================================================
         $kas = Wallet::where('business_id', $businessId)->sum('balance');
         $stok = Product::where('business_id', $businessId)->sum(DB::raw('stock * base_price'));
@@ -522,70 +431,66 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
 
         $depositPel = Customer::where('business_id', $businessId)->sum('deposit_balance');
         $hutangKomisi = Customer::where('business_id', $businessId)->sum('commission_balance');
-        $kewajiban = $totalHutang + $depositPel + $hutangKomisi;
         
-        // 1. Tarik Nominal Modal Disetor (Code: EQ_MODAL) Tembus Tenant Scope Global
+        // PERBAIKAN SAKRAL: Menarik data nominal Hutang Ongkir Kurir yang belum dirilis
+        $hutangOngkir = Delivery::where('business_id', $businessId)
+            ->where('is_paid_to_courier', false)
+            ->whereHas('order', function($q) { $q->where('status', 'completed'); })
+            ->sum('shipping_cost_actual');
+
+        // Total kewajiban menggabungkan 4 unsur hutang riil
+        $kewajiban = $totalHutang + $depositPel + $hutangKomisi + $hutangOngkir;
+        
         $modalCategory = FinanceCategory::withoutGlobalScopes()->where('code', 'EQ_MODAL')->first();
-        $modalAwal = Ledger::where('business_id', $businessId)
-            ->where('finance_category_id', $modalCategory?->id)
-            ->sum('amount');
+        $modalAwal = Ledger::where('business_id', $businessId)->where('finance_category_id', $modalCategory?->id)->sum('amount');
 
-        // 2. Tarik Nominal Prive / Tarik Modal (Code: EQ_PRIVE) Tembus Tenant Scope Global
         $priveCategory = FinanceCategory::withoutGlobalScopes()->where('code', 'EQ_PRIVE')->first();
-        $prive = Ledger::where('business_id', $businessId)
-            ->where('finance_category_id', $priveCategory?->id)
-            ->sum('amount');
+        $prive = Ledger::where('business_id', $businessId)->where('finance_category_id', $priveCategory?->id)->sum('amount');
 
-        // 3. Hitung Selisih Penyesuaian Akuntansi Riil Antara Aktiva vs Pasiva Komponen
-        $ekuitasBuku = $modalAwal + $labaBersih - $prive;
+        // Profit akumulatif seumur hidup penyeimbang pos Neraca
+        $omzetBarangMurni = Order::where('business_id', $businessId)->where('status', 'completed')->where('updated_at', '<=', $endDate)->sum(DB::raw('total_amount - shipping_fee_billed'));
+        $omzetOngkirMurni = Order::where('business_id', $businessId)->where('status', 'completed')->where('updated_at', '<=', $endDate)->sum('shipping_fee_billed');
+        $bebanOngkirMurni = Ledger::where('business_id', $businessId)->where('finance_category_id', $shippingCategory?->id)->where('transaction_date', '<=', $endDate)->sum('amount');
+        $hppMurni = OrderItem::whereHas('order', function($q) use ($businessId, $endDate) { $q->where('business_id', $businessId)->where('status', 'completed')->where('updated_at', '<=', $endDate); })->sum(DB::raw('base_price * (qty_billed + qty_bonus)'));
+        
+        $totalBebanMurni = Ledger::query()
+            ->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
+            ->where('ledgers.business_id', $businessId)->where('ledgers.type', 'out')->where('ledgers.transaction_date', '<=', $endDate)
+            ->whereNotIn('finance_categories.code', ['EXP_PURCHASE', 'LIA_AP', 'ASSET_DEP_SUPPLIER', 'OP_SHIPPING', 'LIA_COMMISSION_PAID', 'LIA_SHIPPING_PAID', 'LIA_CSR_ZAKAT_PAID', 'EQ_MODAL', 'EQ_PRIVE'])
+            ->sum('ledgers.amount') + $bebanOngkirMurni;
+
+        $labaBersihSeumurHidup = ($omzetBarangMurni + $omzetOngkirMurni - $hppMurni) - $totalBebanMurni;
+
+        $ekuitasBuku = $modalAwal + $labaBersihSeumurHidup - $prive;
         $penyesuaianNeraca = $aktiva - ($kewajiban + $ekuitasBuku);
 
         // ==============================================================
-        // --- E. ANALISA USAHA (RASIO) ---
+        // --- E. ANALISA USAHA ---
         // ==============================================================
         $totalOmzet = $omzetBarang + $omzetOngkir;
-        $profitMargin = $totalOmzet > 0 ? ($labaBersih / $totalOmzet) * 100 : 0;
+        $profitMargin = $totalOmzet > 0 ? ($labaBersihPeriodik / $totalOmzet) * 100 : 0;
         $currentRatio = $kewajiban > 0 ? ($aktiva / $kewajiban) : ($aktiva > 0 ? 999 : 0);
         $debtRatio = $aktiva > 0 ? ($kewajiban / $aktiva) * 100 : 0;
 
         return [
-            'omzet_barang' => (float)$omzetBarang, 
-            'omzet_ongkir' => (float)$omzetOngkir, 
-            'hpp' => (float)$hpp,
-            'laba_kotor' => (float)$labaKotor, 
-            'rincian_beban' => $bebanList, 
-            'total_beban' => (float)$totalBeban, 
-            'laba_bersih' => (float)$labaBersih,
+            'omzet_barang' => (float)$omzetBarang, 'omzet_ongkir' => (float)$omzetOngkir, 'hpp' => (float)$hpp,
+            'laba_kotor' => (float)$labaKotor, 'rincian_beban' => $bebanList, 'total_beban' => (float)$totalBeban, 'laba_bersih' => (float)$labaBersihPeriodik,
             
-            'kas_masuk' => $kasMasukList, 
-            'total_kas_masuk' => (float)$totalKasMasuk,
-            'kas_keluar' => $kasKeluarList, 
-            'total_kas_keluar' => (float)$totalKasKeluar,
+            'kas_masuk' => $kasMasukList, 'total_kas_masuk' => (float)$totalKasMasuk,
+            'kas_keluar' => $kasKeluarList, 'total_kas_keluar' => (float)$totalKasKeluar,
             'net_cashflow' => (float)$netCashflow,
 
-            'piutang_list' => $piutangList, 
-            'total_piutang' => (float)$totalPiutang,
-            'hutang_list' => $hutangList, 
-            'total_hutang_usaha' => (float)$totalHutang,
+            'piutang_list' => $piutangList, 'total_piutang' => (float)$totalPiutang,
+            'hutang_list' => $hutangList, 'total_hutang_usaha' => (float)$totalHutang,
 
-            'kas' => (float)$kas, 
-            'piutang_neraca' => (float)$totalPiutang, 
-            'stok' => (float)$stok, 
-            'deposit_sup' => (float)$depositSup, 
-            'total_aktiva' => (float)$aktiva,
+            'kas' => (float)$kas, 'piutang_neraca' => (float)$totalPiutang, 'stok' => (float)$stok, 'deposit_sup' => (float)$depositSup, 'total_aktiva' => (float)$aktiva,
+            'hutang_usaha_neraca' => (float)$totalHutang, 'deposit_pel' => (float)$depositPel, 'hutang_komisi' => (float)$hutangKomisi, 
             
-            'hutang_usaha_neraca' => (float)$totalHutang, 
-            'deposit_pel' => (float)$depositPel, 
-            'hutang_komisi' => (float)$hutangKomisi, 
+            // PERBAIKAN BALANCING: Melempar variabel hutang ongkir baru ke layar
+            'hutang_ongkir' => (float)$hutangOngkir,
             
-            // Komponen Pecahan Ekuitas Baru
-            'modal_awal' => (float)$modalAwal,
-            'laba_berjalan' => (float)$labaBersih,
-            'prive' => (float)$prive,
-            'penyesuaian_neraca' => (float)$penyesuaianNeraca,
-            
-            'total_pasiva' => (float)$aktiva, // Mengunci Balance Keseimbangan Aktiva = Pasiva
-            'ekuitas' => (float)($aktiva - $kewajiban),
+            'modal_awal' => (float)$modalAwal, 'laba_berjalan' => (float)$labaBersihSeumurHidup, 'prive' => (float)$prive, 'penyesuaian_neraca' => (float)$penyesuaianNeraca,
+            'total_pasiva' => (float)$aktiva, 'ekuitas' => (float)($aktiva - $kewajiban),
 
             'profit_margin' => $profitMargin,
             'status_margin' => $profitMargin >= 10 ? 'Sangat Sehat' : ($profitMargin > 0 ? 'Kurang Ideal' : 'Rugi / Bahaya'),

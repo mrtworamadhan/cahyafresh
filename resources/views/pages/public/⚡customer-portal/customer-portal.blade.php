@@ -210,49 +210,74 @@
             
             <div class="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-200 dark:border-purple-800/50 flex justify-between items-center">
                 <div>
-                    <h3 class="font-black text-purple-700 dark:text-purple-400">Rincian Komisi Penjualan</h3>
-                    <p class="text-xs text-purple-600/70 dark:text-purple-500 font-medium">Klik pada nomor nota untuk melihat daftar produk belanjaan orang lain yang menghasilkan komisi Anda.</p>
+                    <h3 class="font-black text-purple-700 dark:text-purple-400">Mutasi & Rincian Komisi</h3>
+                    <p class="text-xs text-purple-600/70 dark:text-purple-500 font-medium">Memantau seluruh jejak bonus masuk dari referral serta riwayat pencairan dana tunai Anda.</p>
                 </div>
             </div>
 
-            @forelse(collect($commissionOrders) as $order)             
-                <div x-data="{ expanded: false }" class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-700 overflow-hidden">                 
-                    <button @click="expanded = !expanded" class="w-full p-4 flex justify-between items-center text-left hover:bg-purple-50/30 dark:hover:bg-purple-900/5 transition">                     
-                        <div>                         
-                            <span class="inline-block px-2 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400 text-[10px] font-black uppercase rounded mb-1">Komisi Masuk</span>                         
-                            <h3 class="font-bold text-sm text-zinc-700 dark:text-zinc-300">{{ data_get($order, 'order_number') }}</h3>                         
-                            <p class="text-xs text-zinc-400">Tanggal: {{ data_get($order, 'order_date') ? \Carbon\Carbon::parse(data_get($order, 'order_date'))->format('d M Y') : '-' }}</p>                     
-                        </div>                     
-                        <div class="text-right flex flex-col items-end gap-1">                         
-                            <span class="text-base font-black text-purple-600 dark:text-purple-400">+Rp {{ number_format(data_get($order, 'commission_amount', 0), 0, ',', '.') }}</span>                         
-                            <x-heroicon-o-chevron-down class="w-4 h-4 text-zinc-400 transition-transform duration-300" x-bind:class="expanded ? 'rotate-180' : ''" />                     
-                        </div>                 
-                    </button>                 
-                    
-                    <div x-show="expanded" x-collapse>                     
-                        <div class="p-4 border-t border-zinc-100 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/20">                         
-                            <p class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2.5">Rincian Barang Belanjaan:</p>
+            @forelse($commissionHistory as $history)         
+                <div x-data="{ expanded: false }" class="bg-white dark:bg-zinc-800 rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-700 overflow-hidden">                
+                    <button @click="if(data_get($history, 'type') === 'in') { expanded = !expanded }" 
+                            class="w-full p-4 flex justify-between items-center text-left transition {{ data_get($history, 'type') === 'in' ? 'hover:bg-purple-50/30 dark:hover:bg-purple-900/5 cursor-pointer' : 'cursor-default' }}">                     
+                        <div>                                             
+                            @if(data_get($history, 'type') === 'in')
+                                <span class="inline-block px-2 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400 text-[10px] font-black uppercase rounded mb-1">Komisi Masuk</span>
+                            @else
+                                <span class="inline-block px-2 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 text-[10px] font-black uppercase rounded mb-1">Pencairan Sukses</span>
+                            @endif
                             
-                            <div class="space-y-2">                             
-                                @foreach(data_get($order, 'orderItems', []) as $item)                                 
-                                    <div class="flex justify-between items-center text-xs p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-700/50 shadow-xs">                                     
-                                        <div>
-                                            <p class="font-bold text-zinc-700 dark:text-zinc-300">{{ data_get($item, 'product.name', 'Produk Terhapus') }}</p>
-                                        </div>
-                                        <div class="text-right">
-                                            <span class="text-[11px] font-medium text-zinc-400">Jumlah Beli: {{ data_get($item, 'qty_billed', 0) }}x{{ data_get($item, 'commission_per_unit', 0) }}</span>
-                                        </div>                                
-                                    </div>                             
-                                @endforeach                         
-                            </div>                         
+                            <h3 class="font-bold text-sm text-zinc-700 dark:text-zinc-300">{{ data_get($history, 'title') }}</h3>                     
+                            <p class="text-xs text-zinc-400">Tanggal: {{ data_get($history, 'date') ? \Carbon\Carbon::parse(data_get($history, 'date'))->format('d M Y - H:i') : '-' }}</p>                     
+                            @if(data_get($history, 'type') === 'in')
+                                @foreach(data_get($history, 'orderItems', []) as $item)
+                                    <p class="text-[11px] text-zinc-400 dark:text-zinc-500 font-medium mt-0.5 italic">
+                                        <span class="font-bold text-purple-600 dark:text-purple-400">[{{ data_get($history, 'customer_name') }}]</span> 
+                                        
+                                        {{ data_get($item, 'product.name', 'Produk Terhapus') }} : 
+                                        {{ data_get($item, 'qty_billed', 0) }}xRp {{ number_format(data_get($item, 'commission_per_unit', 0), 0, ',', '.') }}
+                                    </p>
+                                @endforeach
+                            @else
+                                <p class="text-[11px] text-zinc-400 dark:text-zinc-500 font-medium mt-0.5 italic">{{ data_get($history, 'note') }}</p>
+                            @endif
+                            
                         </div>                     
-                    </div>                 
+                        <div class="text-right flex flex-col items-end gap-1">                                             
+                            @if(data_get($history, 'type') === 'in')
+                                <span class="text-base font-black text-purple-600 dark:text-purple-400">+Rp {{ number_format(data_get($history, 'amount', 0), 0, ',', '.') }}</span>                         
+                                <x-heroicon-o-chevron-down class="w-4 h-4 text-zinc-400 transition-transform duration-300" x-bind:class="expanded ? 'rotate-180' : ''" />                    
+                            @else
+                                <span class="text-base font-black text-red-600 dark:text-red-400">-Rp {{ number_format(data_get($history, 'amount', 0), 0, ',', '.') }}</span>
+                            @endif
+                        </div>                
+                    </button>                    
+                    
+                    @if(data_get($history, 'type') === 'in')
+                        <div x-show="expanded" x-collapse>                     
+                            <div class="p-4 border-t border-zinc-100 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/20">                         
+                                <p class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2.5">Rincian Barang Belanjaan:</p>
+                                
+                                <div class="space-y-2">                                             
+                                    @foreach(data_get($history, 'orderItems', []) as $item)                                                 
+                                        <div class="flex justify-between items-center text-xs p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-100 dark:border-zinc-700/50 shadow-xs">                                         
+                                            <div>
+                                                <p class="font-bold text-zinc-700 dark:text-zinc-300">{{ data_get($item, 'product.name', 'Produk Terhapus') }}</p>
+                                            </div>
+                                            <div class="text-right">
+                                                <span class="text-[11px] font-medium text-zinc-400">Jumlah Beli: {{ data_get($item, 'qty_billed', 0) }}x</span>
+                                            </div>                                     
+                                        </div>                                             
+                                    @endforeach                         
+                                </div>                         
+                            </div>                     
+                        </div> 
+                    @endif                    
                 </div>         
             @empty             
                 <div class="text-center py-16 opacity-50">                 
                     <x-heroicon-o-gift class="w-16 h-16 mx-auto mb-3 text-purple-400" />                 
-                    <p class="font-bold">Belum ada rincian komisi barang.</p>             
-                    <p class="text-xs text-zinc-400 mt-1">Komisi akan terhitung otomatis ketika ada toko atau orang lain yang berbelanja menggunakan link referral Anda.</p>
+                    <p class="font-bold">Belum ada aktivitas mutasi komisi.</p>              
+                    <p class="text-xs text-zinc-400 mt-1">Seluruh riwayat pendapatan bonus komisi dan penarikan tunai Anda akan terekam otomatis di halaman ini.</p>
                 </div>         
             @endforelse     
         </div>

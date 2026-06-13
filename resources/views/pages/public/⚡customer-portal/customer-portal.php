@@ -51,23 +51,34 @@ new #[Title('Customer Portal - Cahya Fresh')] class extends Component
 
         $combinedHistory = collect();
 
-        $ordersWithCommission = Order::where('commission_recipient_id', $this->customer->id)
+        // 1. Tarik Rincian Komisi Masuk dari Pesanan Sukses Orang Lain
+        $commissionOrders = Order::with(['customer', 'orderItems.product']) // <--- Tambah 'customer'
+            ->where('commission_recipient_id', $this->customer->id)
+            ->where('status', 'completed')
             ->where('commission_amount', '>', 0)
             ->get();
 
-        foreach ($ordersWithCommission as $order) {
+        foreach ($commissionOrders as $order) {
             $combinedHistory->push([
-                'date' => $order->order_date,
+                'date' => $order->order_date ?? $order->updated_at,
                 'type' => 'in', 
                 'title' => 'Komisi Masuk (Nota #' . $order->order_number . ')',
-                'amount' => $order->commission_amount,
+                'amount' => (float)$order->commission_amount,
                 'note' => $order->commission_note ?? 'Bonus pencatatan pesanan',
+                'orderItems' => $order->orderItems,
+                'customer_name' => $order->customer?->name ?? 'Pelanggan Umum',
             ]);
         }
+
+        // 2. Tarik Rincian Pencairan Uang Tunai Agen dari Tabel Ledger (Mutasi Keluar)
+        $kategoriPencairan = \App\Models\FinanceCategory::withoutGlobalScopes()->where('code', 'LIA_COMMISSION_PAID')->first();
 
         $ledgerWithdrawals = Ledger::where('contact_id', $this->customer->id)
             ->where('contact_type', Customer::class)
             ->where('type', 'out') 
+            ->when($kategoriPencairan, function($query) use ($kategoriPencairan) {
+                return $query->where('finance_category_id', $kategoriPencairan->id);
+            })
             ->get();
 
         foreach ($ledgerWithdrawals as $ledger) {
@@ -75,12 +86,14 @@ new #[Title('Customer Portal - Cahya Fresh')] class extends Component
                 'date' => $ledger->transaction_date,
                 'type' => 'out', 
                 'title' => 'Pencairan Komisi (Withdraw)',
-                'amount' => $ledger->amount,
-                'note' => $ledger->description,
+                'amount' => (float)$ledger->amount,
+                'note' => $ledger->description ?? 'Penarikan dana tunai dari dompet toko',
+                'orderItems' => [], // Kosong karena bukan nota belanja
             ]);
         }
 
-        // $this->commissionHistory = $combinedHistory->sortByDesc('date')->values()->all();
+        // 3. Gabungkan dan Urutkan Kronologis Berdasarkan Tanggal Terbaru (Anti-Comment)
+        $this->commissionHistory = $combinedHistory->sortByDesc('date')->values()->all();
 
         $this->commissionOrders = Order::with(['orderItems.product'])
             ->where('commission_recipient_id', $this->customer->id)

@@ -2,6 +2,10 @@
 
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Product;
+use App\Models\Ledger;
+use App\Models\Customer;
+use App\Models\FinanceCategory;
 use Livewire\Component;
 use Livewire\Attributes\Layout;
 use Filament\Facades\Filament;
@@ -18,12 +22,13 @@ new #[Layout('layouts::pos')] class extends Component
     public $cancelOrderAmount = 0;
     public string $cancelPaymentStatus = '';
 
-    // PERBAIKAN UTAMA: Properti penampung tanggal yang dipilih
+    public string $shareLink = '';
+    public string $waLink = '';
+
     public ?string $selectedDate = null;
 
     public function mount()
     {
-        // Set default awal ke hari ini saat komponen pertama kali dibuka
         $this->selectedDate = now()->format('Y-m-d');
     }
 
@@ -49,10 +54,59 @@ new #[Layout('layouts::pos')] class extends Component
     {
         if ($this->cancelOrderId) {
             $order = Order::find($this->cancelOrderId);
+            
             if ($order && $order->status === 'draft') {
-                $order->update(['status' => 'canceled']);
+                DB::transaction(function () use ($order) {
+                    
+                    if (in_array($order->payment_status, ['paid', 'partial']) && $order->customer_id) {
+                        
+                        $totalPaid = Ledger::where('reference_type', Order::class)
+                            ->where('reference_id', $order->id)
+                            ->where('type', 'in')
+                            ->sum('amount');
+
+                        if ($totalPaid > 0) {
+                            $kategoriSales = FinanceCategory::withoutGlobalScopes()->where('code', 'INC_SALES')->first();
+                            $kategoriDeposit = FinanceCategory::withoutGlobalScopes()->where('code', 'LIA_DEP_CUSTOMER')->first();
+
+                            Ledger::create([
+                                'business_id' => $order->business_id,
+                                'wallet_id' => null, 
+                                'finance_category_id' => $kategoriSales?->id,
+                                'transaction_date' => now(),
+                                'description' => "Pembatalan Nota {$order->order_number}: Pembalikan Omzet Penjualan",
+                                'type' => 'out',
+                                'amount' => $totalPaid,
+                                'contact_type' => Customer::class,
+                                'contact_id' => $order->customer_id,
+                                'reference_type' => Order::class,
+                                'reference_id' => $order->id,
+                            ]);
+
+                            Ledger::create([
+                                'business_id' => $order->business_id,
+                                'wallet_id' => null,
+                                'finance_category_id' => $kategoriDeposit?->id,
+                                'transaction_date' => now(),
+                                'description' => "Pengalihan Dana Pembatalan Nota {$order->order_number} ke Saldo Deposit",
+                                'type' => 'in', 
+                                'amount' => $totalPaid,
+                                'contact_type' => Customer::class,
+                                'contact_id' => $order->customer_id,
+                                'reference_type' => Order::class,
+                                'reference_id' => $order->id,
+                            ]);
+
+                            Customer::find($order->customer_id)?->increment('deposit_balance', $totalPaid);
+                        }
+                    }
+
+                    $order->update(['status' => 'canceled']);
+                });
+
+                $this->successMessage = "Pesanan {$order->order_number} berhasil dibatalkan." . 
+                    (in_array($this->cancelPaymentStatus, ['paid', 'partial']) ? " Dana pembayaran otomatis dialihkan menjadi saldo Deposit Pelanggan!" : "");
                 
-                $this->successMessage = "Pesanan {$order->order_number} berhasil dibatalkan.";
                 $this->showCancelModal = false;
                 $this->showSuccessModal = true;
             }
@@ -82,19 +136,73 @@ new #[Layout('layouts::pos')] class extends Component
     public function executeCompleteOrder()
     {
         if ($this->completeOrderId) {
-            $order = Order::find($this->completeOrderId);
+            $order = Order::with('orderItems')->find($this->completeOrderId);
             
             if ($order && $order->status === 'draft') {
                 DB::transaction(function () use ($order) {
-                    // Ubah status ke completed (Otomatis potong stok via Observer)
+                    foreach ($order->orderItems as $item) {
+                        $productModel = Product::find($item->product_id);
+                        if ($productModel) {
+                            $hppDasar = (float) $productModel->base_price;
+                            $conversionRate = 1;
+                            if (!empty($item->product_unit_id)) {
+                                $unitModel = \App\Models\ProductUnit::find($item->product_unit_id);
+                                if ($unitModel) { $conversionRate = (float) ($unitModel->conversion_value ?? 1); }
+                            }
+                            $hppFinal = $hppDasar * $conversionRate;
+                            $item->update(['base_price' => $hppFinal]);
+                        }
+                    }
+
+                    if ($order->delivery_type === 'delivery' && (float)$order->shipping_cost_actual > 0) {
+                        $kategoriBebanOngkir = FinanceCategory::withoutGlobalScopes()->where('code', 'OP_SHIPPING')->first();
+                        if ($kategoriBebanOngkir) {
+                            Ledger::create([
+                                'business_id' => $order->business_id,
+                                'wallet_id' => null,
+                                'finance_category_id' => $kategoriBebanOngkir->id,
+                                'transaction_date' => now(),
+                                'description' => "Pengakuan Beban Pengiriman/Kurir Nota: {$order->order_number} (Penyelesaian PO)",
+                                'type' => 'out',
+                                'amount' => (float)$order->shipping_cost_actual,
+                                'reference_type' => Order::class,
+                                'reference_id' => $order->id,
+                            ]);
+                        }
+                    }
+
                     $order->update(['status' => 'completed']);
-                    
                     if ($order->delivery_type === 'delivery' && $order->delivery) {
                         $order->delivery->update(['status' => 'delivered']);
                     }
                 });
 
-                $this->successMessage = "Pesanan {$order->order_number} berhasil diselesaikan. Stok gudang otomatis terpotong!";
+                $this->shareLink = url('/invoice/' . $order->order_number);
+                $tenant = Filament::getTenant();
+                $businessName = $tenant ? $tenant->name : (auth()->user()->businesses()->first()?->name ?? 'Toko Kami');
+
+                $customer = $order->customer_id ? Customer::find($order->customer_id) : null;
+                $customerName = $customer ? $customer->name : 'Pelanggan';
+
+                $customerPhone = $customer && $customer->phone ? preg_replace('/[^0-9]/', '', $customer->phone) : '';
+                if (str_starts_with($customerPhone, '0')) {
+                    $customerPhone = '62' . substr($customerPhone, 1);
+                }
+
+                $pesan = "Halo *{$customerName}*,\n\n";
+                $pesan .= "Pesanan Anda dengan nomor Nota *#{$order->order_number}* telah selesai diproses dan sukses dikirim/diserahkan.\n\n";
+                $pesan .= "Berikut adalah tautan Invoice digital Anda:\n" . $this->shareLink . "\n\n";
+
+                if ($customer && $customer->slug) {
+                    $portalLink = url('/portal/' . $customer->slug);
+                    $pesan .= "Seluruh update riwayat transaksi & catatan komisi Anda bisa dipantau langsung di portal pelanggan:\n{$portalLink}\n\n";
+                }
+
+                $pesan .= "Terima kasih telah berbelanja di *{$businessName}*!";
+                $waText = urlencode($pesan);
+                $this->waLink = $customerPhone ? "https://wa.me/{$customerPhone}?text={$waText}" : "https://wa.me/?text={$waText}";
+
+                $this->successMessage = "Pesanan {$order->order_number} berhasil diselesaikan. Siklus stok dan kurir telah diperbarui!";
                 $this->showCompleteModal = false;
                 $this->showSuccessModal = true;
             }
@@ -104,13 +212,14 @@ new #[Layout('layouts::pos')] class extends Component
     public function closeSuccessModal()
     {
         $this->showSuccessModal = false;
+        $this->shareLink = '';
+        $this->waLink = '';
     }
 
     public function with(): array
     {
         $businessId = Filament::getTenant()?->id ?? auth()->user()->businesses()->first()?->id;
         
-        // 1. DYNAMIC DROPDOWN: Ambil semua tanggal unik yang punya PO aktif (status draft)
         $availableDates = Order::where('business_id', $businessId)
             ->where('status', 'draft')
             ->whereNotNull('delivery_date')
@@ -120,18 +229,15 @@ new #[Layout('layouts::pos')] class extends Component
             ->unique()
             ->toArray();
 
-        // Pastikan hari ini selalu ada di dropdown walaupun daftarnya kosong
         $todayStr = now()->format('Y-m-d');
         if (!in_array($todayStr, $availableDates)) {
             $availableDates[] = $todayStr;
             sort($availableDates);
         }
 
-        // 2. SET ATURAN WAKTU BERDASARKAN SELECTION DROPDOWN
         $today = $this->selectedDate ?? $todayStr;
         $tomorrow = \Carbon\Carbon::parse($today)->addDay()->format('Y-m-d');
 
-        // Tarik Kiriman sesuai tanggal dropdown
         $todayDeliveries = Order::with(['customer', 'orderItems.product'])
             ->where('business_id', $businessId)
             ->whereDate('delivery_date', $today)
@@ -139,7 +245,6 @@ new #[Layout('layouts::pos')] class extends Component
             ->orderBy('created_at', 'asc')
             ->get();
 
-        // Tarik Packing List sesuai tanggal dropdown
         $rawPackingItems = OrderItem::with(['product', 'productUnit']) 
             ->whereHas('order', function ($query) use ($businessId, $today) {
                 $query->where('business_id', $businessId)
@@ -161,7 +266,6 @@ new #[Layout('layouts::pos')] class extends Component
             ];
         })->values();
 
-        // Tarik Shopping List (1 hari setelah tanggal dropdown)
         $rawShoppingItems = OrderItem::with(['product', 'productUnit']) 
             ->whereHas('order', function ($query) use ($businessId, $tomorrow) {
                 $query->where('business_id', $businessId)
@@ -183,7 +287,6 @@ new #[Layout('layouts::pos')] class extends Component
             ];
         })->values();
 
-        // Tetap biarkan Semua PO Aktif global (tidak terikat dropdown) agar pantauan menyeluruh
         $activePoOrders = Order::with(['customer', 'poBatch', 'orderItems.product'])
             ->where('business_id', $businessId)
             ->where('status', 'draft')
@@ -196,7 +299,7 @@ new #[Layout('layouts::pos')] class extends Component
             'packingListToday' => $packingListToday,
             'shoppingListTomorrow' => $shoppingListTomorrow,
             'activePoOrders' => $activePoOrders,
-            'availableDates' => $availableDates, // Dikirim ke Blade
+            'availableDates' => $availableDates, 
             'todayDate' => \Carbon\Carbon::parse($today)->translatedFormat('l, d F Y'),
             'tomorrowDate' => \Carbon\Carbon::parse($tomorrow)->translatedFormat('l, d F Y'),
         ];

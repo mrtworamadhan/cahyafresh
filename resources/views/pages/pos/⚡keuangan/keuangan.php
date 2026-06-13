@@ -4,6 +4,9 @@ use App\Models\Ledger;
 use App\Models\Order;
 use App\Models\Purchase;
 use App\Models\Wallet;
+use App\Models\Product;
+use App\Models\Customer;
+use App\Models\FinanceCategory;
 use Livewire\Component;
 use Livewire\Attributes\Layout;
 use Filament\Facades\Filament;
@@ -87,13 +90,13 @@ new #[Layout('layouts::pos')] class extends Component
         ]);
 
         $businessId = Filament::getTenant()?->id ?? auth()->user()->businesses()->first()?->id;
-        $order = Order::find($this->receivableOrderId);
+        $order = Order::with('orderItems')->find($this->receivableOrderId);
 
         if (!$order) return;
 
         DB::transaction(function () use ($businessId, $order) {
-            $kategoriPenjualan = \App\Models\FinanceCategory::where('code', 'INC_AR')->first(); // AR = Piutang Barang
-            $kategoriOngkir = \App\Models\FinanceCategory::where('code', 'INC_SHIPPING')->first();
+            $kategoriPenjualan = FinanceCategory::withoutGlobalScopes()->where('code', 'INC_AR')->first(); 
+            $kategoriOngkir = FinanceCategory::withoutGlobalScopes()->where('code', 'INC_SHIPPING')->first();
 
             $ongkirSudahDibayar = Ledger::where('reference_type', Order::class)
                 ->where('reference_id', $order->id)
@@ -106,6 +109,7 @@ new #[Layout('layouts::pos')] class extends Component
             $ongkirDibayar = min($uangMasuk, $sisaTagihanOngkir);
             $barangDibayar = $uangMasuk - $ongkirDibayar;
 
+            // 1. Jurnal Arus Uang Tunai Masuk ke Dompet Kasir
             if ($barangDibayar > 0) {
                 Ledger::create([
                     'business_id' => $businessId,
@@ -134,23 +138,86 @@ new #[Layout('layouts::pos')] class extends Component
                 ]);
             }
 
+            // ==============================================================
+            // PERBAIKAN FATAL: JURNAL BEBAN KOMISI DIKONTROL OLEH ALIRAN PEMBAYARAN
+            // Dilepas dari gembok status agar tetap cair saat pelunasan piutang terjadi
+            // ==============================================================
             if ($order->commission_amount > 0 && $order->commission_recipient_id) {
+                $kategoriKomisi = FinanceCategory::withoutGlobalScopes()->where('code', 'OP_COMMISSION')->first();
                 
+                if ($kategoriKomisi) {
+                    // Proteksi Sakral: Cek database apakah komisi nota ini sudah pernah lahir (Cegah Double Entry)
+                    $hasRecordedCommission = Ledger::where('reference_type', Order::class)
+                        ->where('reference_id', $order->id)
+                        ->where('finance_category_id', $kategoriKomisi->id)
+                        ->exists();
 
-                $penerimaKomisi = \App\Models\Customer::find($order->commission_recipient_id);
-                if ($penerimaKomisi) {
-                    $penerimaKomisi->increment('commission_balance', (float)$order->commission_amount);
+                    if (!$hasRecordedCommission) {
+                        // A. Buat Slip Pengakuan Beban Komisi Gantung (wallet_id => null)
+                        Ledger::create([
+                            'business_id' => $businessId,
+                            'wallet_id' => null, // Gantung Non-Tunai (Kewajiban)
+                            'finance_category_id' => $kategoriKomisi->id,
+                            'transaction_date' => now(),
+                            'description' => "Pengakuan Beban Komisi Nota: {$order->order_number} (Pelunasan Piutang)",
+                            'type' => 'out',
+                            'amount' => (float)$order->commission_amount,
+                            'contact_type' => Customer::class,
+                            'contact_id' => $order->commission_recipient_id,
+                            'reference_type' => Order::class,
+                            'reference_id' => $order->id,
+                        ]);
+
+                        // B. Naikkan saldo hutang komisi milik agen di Sisi Pasiva Neraca
+                        $penerimaKomisi = Customer::find($order->commission_recipient_id);
+                        if ($penerimaKomisi) {
+                            $penerimaKomisi->increment('commission_balance', (float)$order->commission_amount);
+                        }
+                    }
                 }
             }
 
+            // ==============================================================
+            // LIFECYCLE BARANG (HANYA DI-EKSEKUSI JIKA TRANSISI DARI DRAFT KE COMPLETED)
+            // ==============================================================
+            $oldStatus = $order->status;
+
+            if ($oldStatus !== 'completed') {
+                
+                // A. Refresh HPP Mengikuti Harga Modal Terbaru Master Produk & Kurangi Stok Gudang
+                
+
+                // C. Jurnal Pengakuan Beban Ongkir Gantung
+                if ($order->delivery_type === 'delivery' && (float)$order->shipping_cost_actual > 0) {
+                    $kategoriBebanOngkir = FinanceCategory::withoutGlobalScopes()->where('code', 'OP_SHIPPING')->first();
+                    if ($kategoriBebanOngkir) {
+                        Ledger::create([
+                            'business_id' => $businessId,
+                            'wallet_id' => null, 
+                            'finance_category_id' => $kategoriBebanOngkir->id,
+                            'transaction_date' => now(),
+                            'description' => "Pengakuan Beban Pengiriman/Kurir Nota: {$order->order_number} (Pelunasan)",
+                            'type' => 'out',
+                            'amount' => (float)$order->shipping_cost_actual,
+                            'reference_type' => Order::class,
+                            'reference_id' => $order->id,
+                        ]);
+                    }
+                }
+            }
+
+            // Tambahkan saldo fisik uang ke rekening/dompet kasir
             Wallet::find($this->receivableWalletId)?->increment('balance', $uangMasuk);
             
-            $order->update(['status' => 'completed']);
-            $order->update(['payment_status' => 'paid']);
+            // Kunci perubahan status nota
+            $order->update([
+                'status' => 'completed',
+                'payment_status' => 'paid'
+            ]);
         });
 
         $this->reset(['receivableOrderId', 'receivableAmount', 'receivableWalletId']);
-        $this->successMessage = 'Pelunasan piutang berhasil dicatat! Saldo dompet bertambah.';
+        $this->successMessage = 'Pelunasan piutang berhasil dicatat! Siklus keuangan & komisi referral telah disinkronkan.';
         $this->showSuccessModal = true;
     }
 
@@ -168,10 +235,12 @@ new #[Layout('layouts::pos')] class extends Component
         if (!$purchase) return;
 
         DB::transaction(function () use ($businessId, $purchase) {
+            $kategoriHutang = FinanceCategory::withoutGlobalScopes()->where('code', 'LIA_AP')->first();
+
             Ledger::create([
                 'business_id' => $businessId,
                 'wallet_id' => $this->payableWalletId,
-                'finance_category_id' => \App\Models\FinanceCategory::where('code', 'LIA_AP')->first()?->id,
+                'finance_category_id' => $kategoriHutang?->id,
                 'transaction_date' => now(),
                 'description' => "Pelunasan Hutang Supplier Nota: {$purchase->invoice_number}",
                 'type' => 'out', 
@@ -199,7 +268,6 @@ new #[Layout('layouts::pos')] class extends Component
     public function with(): array
     {
         $businessId = Filament::getTenant()?->id ?? auth()->user()->businesses()->first()?->id;
-        
         $today = now()->toDateString();
 
         $todaySales = Order::where('business_id', $businessId)
@@ -219,14 +287,20 @@ new #[Layout('layouts::pos')] class extends Component
             'wallets' => Wallet::where('business_id', $businessId)->where('is_active', true)->get(),
             'unpaidOrders' => Order::with('customer')
                 ->where('business_id', $businessId)
-                ->where('status', 'completed') 
+                ->where('status', ['completed']) 
                 ->whereIn('payment_status', ['unpaid', 'partial'])
                 ->latest()
                 ->get(),
             'unpaidPurchases' => Purchase::with('supplier')->where('business_id', $businessId)->where('status', 'unpaid')->latest()->get(),
             'todaySales' => $todaySales,
             'todayExpenses' => $todayExpenses,
-            'expenseCategories' => \App\Models\FinanceCategory::where('type', 'out')->get(),
+            
+            'expenseCategories' => FinanceCategory::withoutGlobalScopes()
+                ->where('type', 'out')
+                ->where(function($query) use ($businessId) {
+                    $query->where('business_id', $businessId)
+                          ->orWhereNull('business_id');
+                })->orderBy('name')->get(),
         ];
     }
 };

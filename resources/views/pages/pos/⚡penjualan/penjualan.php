@@ -50,6 +50,7 @@ new #[Layout('layouts::pos')] class extends Component {
             $this->loadOrderForEdit(request()->query('edit_order'));
         }
     }
+
     public function loadOrderForEdit($orderId)
     {
         $order = Order::with(['orderItems.product.units', 'delivery'])->find($orderId);
@@ -70,7 +71,6 @@ new #[Layout('layouts::pos')] class extends Component {
         $this->paymentStatus = $order->payment_status;
 
         $this->orderNote = $order->notes;
-
         $this->courierId = $order->delivery?->courier_id;
 
         $this->cart = [];
@@ -152,29 +152,11 @@ new #[Layout('layouts::pos')] class extends Component {
         }
     }
 
-    public function validateQty($index)
-    {
-        $this->cart[$index]['qty_billed'] = max(1, (int) ($this->cart[$index]['qty_billed'] ?? 1));
-    }
-    public function increaseQty($index)
-    {
-        $this->cart[$index]['qty_billed']++;
-        $this->validateCart($index);
-    }
-    public function decreaseQty($index)
-    {
-        if ($this->cart[$index]['qty_billed'] > 1) {
-            $this->cart[$index]['qty_billed']--;
-            $this->validateCart($index);
-        } else {
-            $this->removeItem($index);
-        }
-    }
-    public function removeItem($index)
-    {
-        unset($this->cart[$index]);
-        $this->cart = array_values($this->cart);
-    }
+    public function validateQty($index) { $this->validateCart($index); }
+    public function increaseQty($index) { $this->cart[$index]['qty_billed']++; $this->validateCart($index); }
+    public function decreaseQty($index) { if ($this->cart[$index]['qty_billed'] > 1) { $this->cart[$index]['qty_billed']--; $this->validateCart($index); } else { $this->removeItem($index); } }
+    public function removeItem($index) { unset($this->cart[$index]); $this->cart = array_values($this->cart); }
+    
     public function validateCart($index)
     {
         $this->cart[$index]['qty_billed'] = max(1, (int) ($this->cart[$index]['qty_billed'] ?? 1));
@@ -189,15 +171,9 @@ new #[Layout('layouts::pos')] class extends Component {
         });
 
         if (!$this->editOrderId) {
-            if (empty($this->deliveryDate)) {
-                $this->deliveryDate = now()->format('Y-m-d');
-            }
-            if (empty($this->paymentStatus)) {
-                $this->paymentStatus = 'paid';
-            }
-            if (empty($this->deliveryType)) {
-                $this->deliveryType = 'pickup';
-            }
+            if (empty($this->deliveryDate)) $this->deliveryDate = now()->format('Y-m-d');
+            if (empty($this->paymentStatus)) $this->paymentStatus = 'paid';
+            if (empty($this->deliveryType)) $this->deliveryType = 'pickup';
 
             if ($totalCommissionFromCart > 0) {
                 $this->applyCommission = true;
@@ -210,29 +186,20 @@ new #[Layout('layouts::pos')] class extends Component {
                         $this->commissionNote = 'Komisi Referral (Auto)';
                     }
                 }
-            } 
-            elseif ($totalCommissionFromCart == 0 && empty($this->commissionRecipientId)) {
+            } elseif ($totalCommissionFromCart == 0 && empty($this->commissionRecipientId)) {
                 $this->applyCommission = false;
                 $this->commission = 0;
                 $this->commissionRecipientId = null;
                 $this->commissionNote = '';
             }
-        } 
-        else {
-            if (empty($this->deliveryDate)) {
-                $this->deliveryDate = now()->format('Y-m-d');
-            }
-            if (empty($this->deliveryType)) {
-                $this->deliveryType = 'pickup';
-            }
-            if (empty($this->paymentStatus)) {
-                $this->paymentStatus = 'paid';
-            }
+        } else {
+            if (empty($this->deliveryDate)) $this->deliveryDate = now()->format('Y-m-d');
+            if (empty($this->deliveryType)) $this->deliveryType = 'pickup';
+            if (empty($this->paymentStatus)) $this->paymentStatus = 'paid';
 
             if ($totalCommissionFromCart > 0) {
                 $this->applyCommission = true;
                 $this->commission = $totalCommissionFromCart;
-
                 if (empty($this->commissionRecipientId) && $this->customerId) {
                     $customer = Customer::find($this->customerId);
                     if ($customer && $customer->referred_by_id) {
@@ -245,25 +212,12 @@ new #[Layout('layouts::pos')] class extends Component {
 
         $totalAmount = collect($this->cart)->sum(fn($item) => (float)$item['price'] * (int)$item['qty_billed']);
         $this->finalTotal = max(0, $totalAmount - (float)$this->discount) + (float)$this->shippingFeeBilled;
-
         $this->showCheckoutModal = true;
     }
 
-    public function closeCheckout()
-    {
-        $this->showCheckoutModal = false;
-    }
-
-    public function updatedPaymentStatus($value)
-    {
-        $this->paymentAmount = $value === 'paid' ? $this->finalTotal : 0;
-    }
-
-    public function updatedDiscount()
-    {
-        if ($this->paymentStatus === 'paid')
-            $this->paymentAmount = $this->finalTotal;
-    }
+    public function closeCheckout() { $this->showCheckoutModal = false; }
+    public function updatedPaymentStatus($value) { $this->paymentAmount = $value === 'paid' ? $this->finalTotal : 0; }
+    public function updatedDiscount() { if ($this->paymentStatus === 'paid') $this->paymentAmount = $this->finalTotal; }
 
     public function getFinalTotalProperty()
     {
@@ -311,10 +265,12 @@ new #[Layout('layouts::pos')] class extends Component {
         $orderNumber = '';
 
         DB::transaction(function () use ($businessId, &$orderNumber, $finalTotal) {
+            $oldStatus = 'draft';
 
             if ($this->editOrderId) {
                 $order = Order::find($this->editOrderId);
                 $orderNumber = $order->order_number;
+                $oldStatus = $order->status;
 
                 $order->update([
                     'customer_id' => $this->customerId ?: null,
@@ -333,9 +289,7 @@ new #[Layout('layouts::pos')] class extends Component {
                 ]);
 
                 OrderItem::where('order_id', $order->id)->delete();
-
             } else {
-
                 $lastOrder = Order::where('business_id', $businessId)->latest('id')->first();
                 $orderNumber = (!$lastOrder || empty($lastOrder->order_number)) ? 'INV-0001' : 'INV-' . str_pad((int) substr($lastOrder->order_number, 4) + 1, 4, '0', STR_PAD_LEFT);
 
@@ -351,7 +305,7 @@ new #[Layout('layouts::pos')] class extends Component {
                     'commission_recipient_id' => $this->applyCommission ? $this->commissionRecipientId : null,
                     'commission_note' => $this->applyCommission ? $this->commissionNote : null,
                     'po_batch_id' => $this->poBatchId ?: null,
-                    'status' => 'draft', // Default buat baru
+                    'status' => 'draft', 
                     'payment_status' => $this->paymentStatus,
                     'delivery_type' => $this->deliveryType,
                     'shipping_fee_billed' => $this->deliveryType === 'delivery' ? (float) $this->shippingFeeBilled : 0,
@@ -362,7 +316,7 @@ new #[Layout('layouts::pos')] class extends Component {
 
             foreach ($this->cart as $item) {
                 $productModel = Product::find($item['product_id']);
-
+                
                 $hppDasar = $productModel ? (float) $productModel->base_price : 0;
                 $conversionRate = 1; 
 
@@ -381,7 +335,7 @@ new #[Layout('layouts::pos')] class extends Component {
                     'qty_billed' => (int) $item['qty_billed'],
                     'qty_bonus' => (int) $item['qty_bonus'],
                     'unit_price' => (float) $item['price'],
-                    'base_price' => $hppFinal,
+                    'base_price' => $hppFinal, 
                     'product_unit_id' => $item['unit_id'] ?: null,
                     'commission_per_unit' => $this->applyCommission ? (float) ($item['commission_per_unit'] ?? 0) : 0,
                     'subtotal' => (float) $item['price'] * (int) $item['qty_billed'],
@@ -411,18 +365,76 @@ new #[Layout('layouts::pos')] class extends Component {
             }
 
             $isPoOrFutureDelivery = $this->poBatchId || ($this->deliveryDate && $this->deliveryDate !== now()->format('Y-m-d'));
+            $newStatus = $isPoOrFutureDelivery ? 'draft' : 'completed';
 
             $order->update([
-                'status' => $isPoOrFutureDelivery ? 'draft' : 'completed'
+                'status' => $newStatus
             ]);
 
-            if (!$this->editOrderId) {
-                $paidMoney = $this->paymentStatus === 'unpaid' ? 0 : (float) $this->paymentAmount;
+            // ==============================================================
+            // LIKECYCLE AKUNTANSI & INVENTORY ACCRUAL (SAAT TRANSISI KE COMPLETED)
+            // ==============================================================
+            if ($newStatus === 'completed' && $oldStatus !== 'completed') {
+                
 
-                if ($paidMoney > 0 && $this->walletId) {
+                // 2. Jurnal Pengakuan Beban Komisi Gantung (wallet_id => null)
+                if ($this->applyCommission && $this->commissionRecipientId && $this->commission > 0) {
+                    $kategoriKomisi = \App\Models\FinanceCategory::withoutGlobalScopes()->where('code', 'OP_COMMISSION')->first();
+                    if ($kategoriKomisi) {
+                        Ledger::create([
+                            'business_id' => $businessId,
+                            'wallet_id' => null, // Non-Tunai (Gantung Kewajiban)
+                            'finance_category_id' => $kategoriKomisi->id,
+                            'transaction_date' => now(),
+                            'description' => "Pengakuan Beban Komisi Nota: {$orderNumber}",
+                            'type' => 'out',
+                            'amount' => (float) $this->commission,
+                            'contact_type' => Customer::class,
+                            'contact_id' => $this->commissionRecipientId,
+                            'reference_type' => Order::class,
+                            'reference_id' => $order->id,
+                        ]);
+                    }
 
-                    $kategoriPenjualan = \App\Models\FinanceCategory::where('code', 'INC_SALES')->first();
-                    $kategoriOngkir = \App\Models\FinanceCategory::where('code', 'INC_SHIPPING')->first();
+                    // Naikkan Hutang Komisi Agen di Sisi Pasiva Neraca
+                    Customer::find($this->commissionRecipientId)?->increment('commission_balance', (float) $this->commission);
+                }
+
+                // 3. Jurnal Pengakuan Beban Ongkir Gantung (wallet_id => null)
+                if ($this->deliveryType === 'delivery' && (float)$this->shippingCostActual > 0) {
+                    $kategoriBebanOngkir = \App\Models\FinanceCategory::withoutGlobalScopes()->where('code', 'OP_SHIPPING')->first();
+                    if ($kategoriBebanOngkir) {
+                        Ledger::create([
+                            'business_id' => $businessId,
+                            'wallet_id' => null, // Non-Tunai (Gantung Kewajiban Kurir)
+                            'finance_category_id' => $kategoriBebanOngkir->id,
+                            'transaction_date' => now(),
+                            'description' => "Pengakuan Beban Pengiriman/Kurir Nota: {$orderNumber}",
+                            'type' => 'out',
+                            'amount' => (float) $this->shippingCostActual,
+                            'reference_type' => Order::class,
+                            'reference_id' => $order->id,
+                        ]);
+                    }
+                }
+            }
+
+            // ==============================================================
+            // PENCATATAN MUTASI TUNAI/BANK JIKA ADA UANG MASUK (KASIR)
+            // ==============================================================
+            $paidMoney = $this->paymentStatus === 'unpaid' ? 0 : (float) $this->paymentAmount;
+
+            if ($paidMoney > 0 && $this->walletId) {
+                
+                // Gembok Keamanan: Cegah double saldo kas jika mengedit PO yang sudah ter-jurnal cash
+                $hasExistingPayment = Ledger::where('reference_type', Order::class)
+                    ->where('reference_id', $order->id)
+                    ->where('type', 'in')
+                    ->exists();
+
+                if (!$hasExistingPayment) {
+                    $kategoriPenjualan = \App\Models\FinanceCategory::withoutGlobalScopes()->where('code', 'INC_SALES')->first();
+                    $kategoriOngkir = \App\Models\FinanceCategory::withoutGlobalScopes()->where('code', 'INC_SHIPPING')->first();
 
                     $tagihanOngkir = $this->deliveryType === 'delivery' ? (float) $this->shippingFeeBilled : 0;
                     $ongkirDibayar = min($paidMoney, $tagihanOngkir);
@@ -461,14 +473,6 @@ new #[Layout('layouts::pos')] class extends Component {
                     }
 
                     Wallet::find($this->walletId)?->increment('balance', $paidMoney);
-
-                    if ($this->applyCommission && $this->commissionRecipientId && $this->commission > 0) {
-
-                        $penerimaKomisi = Customer::find($this->commissionRecipientId);
-                        if ($penerimaKomisi) {
-                            $penerimaKomisi->increment('commission_balance', (float) $this->commission);
-                        }
-                    }
                 }
             }
         });
@@ -494,7 +498,6 @@ new #[Layout('layouts::pos')] class extends Component {
         }
 
         $pesan .= "Terima kasih telah berbelanja di *{$businessName}*!";
-
         $waText = urlencode($pesan);
         $this->waLink = $customerPhone ? "https://wa.me/{$customerPhone}?text={$waText}" : "https://wa.me/?text={$waText}";
 
@@ -531,6 +534,4 @@ new #[Layout('layouts::pos')] class extends Component {
             'total' => $total,
         ];
     }
-
-
 };

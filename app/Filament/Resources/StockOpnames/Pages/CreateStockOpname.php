@@ -70,8 +70,9 @@ class CreateStockOpname extends CreateRecord
             Log::info("Total Kerugian (Barang Hilang): " . $totalKerugian);
             Log::info("Total Grand Adjustment: " . $totalAdjustment);
 
-
-
+            // ==============================================================
+            // 1. JURNAL BEBAN KERUGIAN BARANG HILANG (EXP_LOSS)
+            // ==============================================================
             if ($totalKerugian > 0) {
                 Log::info("Mencoba mencari Kategori COA dengan kode 'EXP_LOSS'...");
                 
@@ -88,12 +89,14 @@ class CreateStockOpname extends CreateRecord
                 if ($katLoss) {
                     Ledger::create([
                         'business_id' => $businessId,
-                        'wallet_id' => null, 
+                        'wallet_id' => null, // Non-tunai (Tidak memotong kas/bank)
                         'finance_category_id' => $katLoss->id,
-                        'transaction_date' => $opname->opname_date,
+                        'transaction_date' => $opname->opname_date ?? now(),
                         'description' => "Beban Kerugian Stok (Opname #{$opname->id})",
                         'type' => 'out',
                         'amount' => $totalKerugian,
+                        'reference_type' => get_class($opname), // <--- BARU: Kunci Audit Trail
+                        'reference_id' => $opname->id,          // <--- BARU: Kunci Audit Trail
                     ]);
                     Log::info("Ledger Kerugian BERHASIL dibuat.");
                 } else {
@@ -101,28 +104,34 @@ class CreateStockOpname extends CreateRecord
                 }
             }
 
+            // ==============================================================
+            // 2. JURNAL PENDAPATAN BARANG LEBIH / DITEMUKAN (INC_GAIN)
+            // ==============================================================
             if ($totalKeuntungan > 0) {
-                Log::info("Mencoba mencari Kategori COA dengan kode 'INC_OTHER'...");
+                // PERBAIKAN FATAL: Mengubah kode pencarian dari INC_OTHER ke INC_GAIN sesuai COA baru
+                Log::info("Mencoba mencari Kategori COA dengan kode 'INC_GAIN'...");
                 
                 $katGain = FinanceCategory::withoutGlobalScopes()
-                    ->where('code', 'INC_OTHER')
+                    ->where('code', 'INC_GAIN')
                     ->where(function($query) use ($businessId) {
                         $query->where('business_id', $businessId)
                             ->orWhereNull('business_id');
                     })
                     ->first();
                 
-                Log::info("Hasil pencarian COA 'INC_OTHER': " . ($katGain ? "DITEMUKAN (ID: {$katGain->id})" : "TIDAK DITEMUKAN (NULL)"));
+                Log::info("Hasil pencarian COA 'INC_GAIN': " . ($katGain ? "DITEMUKAN (ID: {$katGain->id})" : "TIDAK DITEMUKAN (NULL)"));
 
                 if ($katGain) {
                     Ledger::create([
                         'business_id' => $businessId,
-                        'wallet_id' => null, 
+                        'wallet_id' => null, // Non-tunai 
                         'finance_category_id' => $katGain->id,
-                        'transaction_date' => $opname->opname_date,
+                        'transaction_date' => $opname->opname_date ?? now(),
                         'description' => "Pendapatan Penyesuaian Stok Ditemukan (Opname #{$opname->id})",
                         'type' => 'in',
                         'amount' => $totalKeuntungan,
+                        'reference_type' => get_class($opname), // <--- BARU: Kunci Audit Trail
+                        'reference_id' => $opname->id,          // <--- BARU: Kunci Audit Trail
                     ]);
                     Log::info("Ledger Keuntungan BERHASIL dibuat.");
                 } else {

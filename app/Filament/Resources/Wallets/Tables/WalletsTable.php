@@ -88,7 +88,7 @@ class WalletsTable
                         }
 
                         DB::transaction(function () use ($record, $targetWallet, $cleanAmount, $data) {
-                            
+                            // Transfer keluar (Kategori Keuangan di-set NULL karena murni perpindahan internal/mutasi bank)
                             Ledger::create([
                                 'business_id' => $record->business_id,
                                 'wallet_id' => $record->id,
@@ -100,6 +100,7 @@ class WalletsTable
                             ]);
                             $record->decrement('balance', $cleanAmount);
 
+                            // Transfer masuk
                             Ledger::create([
                                 'business_id' => $targetWallet->business_id,
                                 'wallet_id' => $targetWallet->id,
@@ -110,7 +111,6 @@ class WalletsTable
                                 'amount' => $cleanAmount,
                             ]);
                             $targetWallet->increment('balance', $cleanAmount);
-                            
                         });
 
                         Notification::make()
@@ -119,6 +119,7 @@ class WalletsTable
                             ->success()
                             ->send();
                     }),
+
                 Action::make('suntik_modal')
                     ->label('Suntik Modal')
                     ->icon('heroicon-o-arrow-down-tray')
@@ -137,25 +138,32 @@ class WalletsTable
                     ->action(function (Wallet $record, array $data) {
                         $cleanAmount = (float) str_replace(['.', ','], ['', '.'], $data['amount']);
 
-                        $kategoriModal = \App\Models\FinanceCategory::where('code', 'EQ_MODAL')->first();
+                        // AMANKAN PROSES LEWAT TRANSAKSI GANDA
+                        DB::transaction(function () use ($record, $cleanAmount, $data) {
+                            
+                            // PERBAIKAN UTAMA: Tembus gembok tenant untuk membaca COA Sistem Master
+                            $kategoriModal = \App\Models\FinanceCategory::withoutGlobalScopes()
+                                ->where('code', 'EQ_MODAL')
+                                ->first();
 
-                        Ledger::create([
-                            'business_id' => $record->business_id,
-                            'wallet_id' => $record->id,
-                            'finance_category_id' => $kategoriModal?->id,
-                            'transaction_date' => now(),
-                            'description' => 'Modal Eksekutif: ' . $data['notes'],
-                            'type' => 'in', 
-                            'amount' => $cleanAmount,
-                        ]);
+                            Ledger::create([
+                                'business_id' => $record->business_id,
+                                'wallet_id' => $record->id,
+                                'finance_category_id' => $kategoriModal?->id,
+                                'transaction_date' => now(),
+                                'description' => 'Modal Eksekutif: ' . $data['notes'],
+                                'type' => 'in', 
+                                'amount' => $cleanAmount,
+                            ]);
 
-                        $record->increment('balance', $cleanAmount);
+                            $record->increment('balance', $cleanAmount);
+                        });
 
                         Notification::make()->title('Modal Berhasil Ditambahkan!')->success()->send();
                     }),
 
                 Action::make('tarik_prive')
-                    ->label('Tarik Dana')
+                    ->label('Tarik Dana (Prive)')
                     ->icon('heroicon-o-arrow-up-tray')
                     ->color('danger')
                     ->form([
@@ -181,19 +189,26 @@ class WalletsTable
                             return;
                         }
 
-                        $kategoriPrive = \App\Models\FinanceCategory::where('code', 'EQ_PRIVE')->first();
+                        // AMANKAN PROSES LEWAT TRANSAKSI GANDA
+                        DB::transaction(function () use ($record, $cleanAmount, $data) {
+                            
+                            // PERBAIKAN UTAMA: Tembus gembok tenant untuk membaca COA Sistem Master
+                            $kategoriPrive = \App\Models\FinanceCategory::withoutGlobalScopes()
+                                ->where('code', 'EQ_PRIVE')
+                                ->first();
 
-                        Ledger::create([
-                            'business_id' => $record->business_id,
-                            'wallet_id' => $record->id,
-                            'finance_category_id' => $kategoriPrive?->id, 
-                            'transaction_date' => now(),
-                            'description' => 'Prive Eksekutif: ' . $data['notes'],
-                            'type' => 'out', 
-                            'amount' => $cleanAmount,
-                        ]);
+                            Ledger::create([
+                                'business_id' => $record->business_id,
+                                'wallet_id' => $record->id,
+                                'finance_category_id' => $kategoriPrive?->id, 
+                                'transaction_date' => now(),
+                                'description' => 'Prive Eksekutif: ' . $data['notes'],
+                                'type' => 'out', 
+                                'amount' => $cleanAmount,
+                            ]);
 
-                        $record->decrement('balance', $cleanAmount);
+                            $record->decrement('balance', $cleanAmount);
+                        });
 
                         Notification::make()->title('Penarikan Dana Berhasil!')->success()->send();
                     }),
