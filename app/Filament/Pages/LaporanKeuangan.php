@@ -269,7 +269,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                             
                                             TextEntry::make('total_pasiva')->label('TOTAL PASIVA')->money('IDR')->weight('black')->color('primary')->size(TextSize::Large),
                                         ])->columnSpan(1),
-                                        
+
                                     TextEntry::make('penyesuaian_neraca')->label('Selisih Penyesuaian Akuntansi')->money('IDR')->color('warning')->helperText('Selisih transaksi non-kas/backdate.'),
                                             
                                 ])
@@ -321,11 +321,20 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $endDate = ($this->data['end_date'] ?? now()->format('Y-m-d')) . ' 23:59:59';
 
         // ==============================================================
-        // --- A. LABA RUGI PERIODIK ---
+        // --- A. LABA RUGI PERIODIK (FILTERED BY DATE) ---
         // ==============================================================
         $omzetBarang = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('updated_at', [$startDate, $endDate])->sum(DB::raw('total_amount - shipping_fee_billed'));
         $omzetOngkir = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('updated_at', [$startDate, $endDate])->sum('shipping_fee_billed');
         
+        // PERBAIKAN: Menarik Pendapatan Non-Penjualan (Opname Lebih/INC_OTHER) Periodik dari Ledger
+        $pendapatanLedgerPeriodik = Ledger::query()
+            ->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
+            ->where('ledgers.business_id', $businessId)
+            ->where('ledgers.type', 'in')
+            ->whereIn('finance_categories.code', ['INC_GAIN', 'INC_OTHER'])
+            ->whereBetween('ledgers.transaction_date', [$startDate, $endDate])
+            ->sum('ledgers.amount');
+
         $shippingCategory = FinanceCategory::withoutGlobalScopes()->where('code', 'OP_SHIPPING')->first();
         $bebanOngkir = Ledger::where('business_id', $businessId)
             ->where('finance_category_id', $shippingCategory?->id)
@@ -359,7 +368,8 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             $totalBeban += $beban->total;
         }
 
-        $labaKotor = ($omzetBarang + $omzetOngkir) - $hpp;
+        // PERBAIKAN: Menambahkan unsur pendapatan ledger periodik ke dalam Gross & Net Profit
+        $labaKotor = ($omzetBarang + $omzetOngkir + $pendapatanLedgerPeriodik) - $hpp;
         $labaBersihPeriodik = $labaKotor - $totalBeban;
 
         // ==============================================================
@@ -432,13 +442,11 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $depositPel = Customer::where('business_id', $businessId)->sum('deposit_balance');
         $hutangKomisi = Customer::where('business_id', $businessId)->sum('commission_balance');
         
-        // PERBAIKAN SAKRAL: Menarik data nominal Hutang Ongkir Kurir yang belum dirilis
         $hutangOngkir = Delivery::where('business_id', $businessId)
             ->where('is_paid_to_courier', false)
             ->whereHas('order', function($q) { $q->where('status', 'completed'); })
             ->sum('shipping_cost_actual');
 
-        // Total kewajiban menggabungkan 4 unsur hutang riil
         $kewajiban = $totalHutang + $depositPel + $hutangKomisi + $hutangOngkir;
         
         $modalCategory = FinanceCategory::withoutGlobalScopes()->where('code', 'EQ_MODAL')->first();
@@ -447,7 +455,15 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $priveCategory = FinanceCategory::withoutGlobalScopes()->where('code', 'EQ_PRIVE')->first();
         $prive = Ledger::where('business_id', $businessId)->where('finance_category_id', $priveCategory?->id)->sum('amount');
 
-        // Profit akumulatif seumur hidup penyeimbang pos Neraca
+        // PERBAIKAN UTAMA: Menarik data bonus keuntungan opname (INC_GAIN & INC_OTHER) seumur hidup
+        $pendapatanLedgerMurni = Ledger::query()
+            ->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
+            ->where('ledgers.business_id', $businessId)
+            ->where('ledgers.type', 'in')
+            ->whereIn('finance_categories.code', ['INC_GAIN', 'INC_OTHER'])
+            ->where('ledgers.transaction_date', '<=', $endDate)
+            ->sum('ledgers.amount');
+
         $omzetBarangMurni = Order::where('business_id', $businessId)->where('status', 'completed')->where('updated_at', '<=', $endDate)->sum(DB::raw('total_amount - shipping_fee_billed'));
         $omzetOngkirMurni = Order::where('business_id', $businessId)->where('status', 'completed')->where('updated_at', '<=', $endDate)->sum('shipping_fee_billed');
         $bebanOngkirMurni = Ledger::where('business_id', $businessId)->where('finance_category_id', $shippingCategory?->id)->where('transaction_date', '<=', $endDate)->sum('amount');
@@ -459,7 +475,8 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             ->whereNotIn('finance_categories.code', ['EXP_PURCHASE', 'LIA_AP', 'ASSET_DEP_SUPPLIER', 'OP_SHIPPING', 'LIA_COMMISSION_PAID', 'LIA_SHIPPING_PAID', 'LIA_CSR_ZAKAT_PAID', 'EQ_MODAL', 'EQ_PRIVE'])
             ->sum('ledgers.amount') + $bebanOngkirMurni;
 
-        $labaBersihSeumurHidup = ($omzetBarangMurni + $omzetOngkirMurni - $hppMurni) - $totalBebanMurni;
+        // PERBAIKAN SAKRAL: Menambahkan $pendapatanLedgerMurni ke hitungan laba seumur hidup pasiva neraca
+        $labaBersihSeumurHidup = ($omzetBarangMurni + $omzetOngkirMurni + $pendapatanLedgerMurni - $hppMurni) - $totalBebanMurni;
 
         $ekuitasBuku = $modalAwal + $labaBersihSeumurHidup - $prive;
         $penyesuaianNeraca = $aktiva - ($kewajiban + $ekuitasBuku);
@@ -467,7 +484,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         // ==============================================================
         // --- E. ANALISA USAHA ---
         // ==============================================================
-        $totalOmzet = $omzetBarang + $omzetOngkir;
+        $totalOmzet = $omzetBarang + $omzetOngkir + $pendapatanLedgerPeriodik;
         $profitMargin = $totalOmzet > 0 ? ($labaBersihPeriodik / $totalOmzet) * 100 : 0;
         $currentRatio = $kewajiban > 0 ? ($aktiva / $kewajiban) : ($aktiva > 0 ? 999 : 0);
         $debtRatio = $aktiva > 0 ? ($kewajiban / $aktiva) * 100 : 0;
@@ -484,10 +501,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             'hutang_list' => $hutangList, 'total_hutang_usaha' => (float)$totalHutang,
 
             'kas' => (float)$kas, 'piutang_neraca' => (float)$totalPiutang, 'stok' => (float)$stok, 'deposit_sup' => (float)$depositSup, 'total_aktiva' => (float)$aktiva,
-            'hutang_usaha_neraca' => (float)$totalHutang, 'deposit_pel' => (float)$depositPel, 'hutang_komisi' => (float)$hutangKomisi, 
-            
-            // PERBAIKAN BALANCING: Melempar variabel hutang ongkir baru ke layar
-            'hutang_ongkir' => (float)$hutangOngkir,
+            'hutang_usaha_neraca' => (float)$totalHutang, 'deposit_pel' => (float)$depositPel, 'hutang_komisi' => (float)$hutangKomisi, 'hutang_ongkir' => (float)$hutangOngkir,
             
             'modal_awal' => (float)$modalAwal, 'laba_berjalan' => (float)$labaBersihSeumurHidup, 'prive' => (float)$prive, 'penyesuaian_neraca' => (float)$penyesuaianNeraca,
             'total_pasiva' => (float)$aktiva, 'ekuitas' => (float)($aktiva - $kewajiban),
