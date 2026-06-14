@@ -85,7 +85,7 @@
                                 <label class="text-[10px] text-teal-600 font-bold uppercase tracking-wider mb-1 block">Satuan Belanja</label>
                                 @if(count($item['available_units']) > 0)
                                     <select wire:change="changeCartUnit({{ $index }}, $event.target.value)" class="w-full px-2 py-1.5 text-xs font-bold bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md focus:border-teal-500 outline-none text-zinc-800 dark:text-zinc-100">
-                                        <option value="">Satuan Dasar</option>
+                                        <option value="">Pilih Satuan</option>
                                         @foreach($item['available_units'] as $unit)
                                             <option value="{{ $unit['id'] }}" {{ $item['unit_id'] == $unit['id'] ? 'selected' : '' }}>{{ $unit['unit_name'] }}</option>
                                         @endforeach

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\FinanceCategory;
 use App\Models\Order;
 use App\Models\Ledger;
 use App\Models\Customer;
@@ -18,6 +19,7 @@ new #[Title('Customer Portal - Cahya Fresh')] class extends Component
     public $commissionOrders = []; 
     public $wallets = [];
     public $totalUnpaid = 0;
+    public array $transactionHistory = [];
 
     public $totalPiutang = 0;
     public $totalDeposit = 0;
@@ -49,10 +51,56 @@ new #[Title('Customer Portal - Cahya Fresh')] class extends Component
                 return $order->delivery_date ?? $order->order_date;
             })->values()->all();
 
+        $historyStream = collect();
+
+        // 1. Ambil Semua Nota Belanja Completed (Menjadi Baris "TAGIHAN KELUAR")
+        $customerOrders = Order::where('customer_id', $this->customer->id)
+            ->where('status', 'completed')
+            ->get();
+
+        foreach ($customerOrders as $order) {
+            $historyStream->push([
+                // PERBAIKAN SAKRAL: Paksa format tanggal menjadi string datetime standard
+                'created_at' => \Carbon\Carbon::parse($order->created_at)->format('Y-m-d H:i:s'),
+                'type' => 'tagihan', 
+                'reference' => $order->order_number,
+                'title' => 'Tagihan Belanja (Nota #' . $order->order_number . ')',
+                'amount' => (float)$order->total_amount,
+                'badge_color' => 'rose',
+                'note' => 'Pembelian produk dagangan gantung/piutang.',
+            ]);
+        }
+
+        // 2. Ambil Semua Log Pembayaran Cicilan di Ledger (Menjadi Baris "PEMBAYARAN MASUK")
+        $orderIds = $customerOrders->pluck('id')->toArray();
+        
+        $kategoriAr = FinanceCategory::withoutGlobalScopes()->where('code', 'INC_AR')->first()?->id;
+        $kategoriShipping = FinanceCategory::withoutGlobalScopes()->where('code', 'INC_SHIPPING')->first()?->id;
+
+        $paymentLedgers = Ledger::where('reference_type', Order::class)
+            ->whereIn('reference_id', $orderIds)
+            ->whereIn('finance_category_id', [$kategoriAr, $kategoriShipping])
+            ->where('type', 'in') 
+            ->get();
+
+        foreach ($paymentLedgers as $ledger) {
+            $historyStream->push([
+                'created_at' => \Carbon\Carbon::parse($ledger->transaction_date)->format('Y-m-d H:i:s'),
+                'type' => 'pembayaran',
+                'reference' => $ledger->description,
+                'title' => 'Pembayaran Diterima (Kasir)',
+                'amount' => (float)$ledger->amount,
+                'badge_color' => 'green',
+                'note' => $ledger->description, 
+            ]);
+        }
+
+        $this->transactionHistory = $historyStream->sortByDesc('created_at')->values()->all();
+
         $combinedHistory = collect();
 
-        // 1. Tarik Rincian Komisi Masuk dari Pesanan Sukses Orang Lain
-        $commissionOrders = Order::with(['customer', 'orderItems.product']) // <--- Tambah 'customer'
+        // 1. Ambil Data Komisi Masuk (In)
+        $commissionOrders = Order::with(['customer', 'orderItems.product'])
             ->where('commission_recipient_id', $this->customer->id)
             ->where('status', 'completed')
             ->where('commission_amount', '>', 0)
@@ -60,7 +108,8 @@ new #[Title('Customer Portal - Cahya Fresh')] class extends Component
 
         foreach ($commissionOrders as $order) {
             $combinedHistory->push([
-                'date' => $order->order_date ?? $order->updated_at,
+                // PERBAIKAN: Paksa format tanggal menjadi string datetime standard agar apple-to-apple saat di-sort
+                'created_at' => \Carbon\Carbon::parse($order->order_date ?? $order->updated_at)->format('Y-m-d H:i:s'),
                 'type' => 'in', 
                 'title' => 'Komisi Masuk (Nota #' . $order->order_number . ')',
                 'amount' => (float)$order->commission_amount,
@@ -70,8 +119,8 @@ new #[Title('Customer Portal - Cahya Fresh')] class extends Component
             ]);
         }
 
-        // 2. Tarik Rincian Pencairan Uang Tunai Agen dari Tabel Ledger (Mutasi Keluar)
-        $kategoriPencairan = \App\Models\FinanceCategory::withoutGlobalScopes()->where('code', 'LIA_COMMISSION_PAID')->first();
+        // 2. Ambil Data Pencairan Komisi / Withdraw (Out)
+        $kategoriPencairan = FinanceCategory::withoutGlobalScopes()->where('code', 'LIA_COMMISSION_PAID')->first();
 
         $ledgerWithdrawals = Ledger::where('contact_id', $this->customer->id)
             ->where('contact_type', Customer::class)
@@ -83,17 +132,17 @@ new #[Title('Customer Portal - Cahya Fresh')] class extends Component
 
         foreach ($ledgerWithdrawals as $ledger) {
             $combinedHistory->push([
-                'date' => $ledger->transaction_date,
+                // PERBAIKAN: Paksa format tanggal menjadi string datetime standard yang sama
+                'created_at' => \Carbon\Carbon::parse($ledger->transaction_date)->format('Y-m-d H:i:s'),
                 'type' => 'out', 
                 'title' => 'Pencairan Komisi (Withdraw)',
                 'amount' => (float)$ledger->amount,
                 'note' => $ledger->description ?? 'Penarikan dana tunai dari dompet toko',
-                'orderItems' => [], // Kosong karena bukan nota belanja
+                'orderItems' => [], 
             ]);
         }
 
-        // 3. Gabungkan dan Urutkan Kronologis Berdasarkan Tanggal Terbaru (Anti-Comment)
-        $this->commissionHistory = $combinedHistory->sortByDesc('date')->values()->all();
+        $this->commissionHistory = $combinedHistory->sortByDesc('created_at')->values()->all();
 
         $this->commissionOrders = Order::with(['orderItems.product'])
             ->where('commission_recipient_id', $this->customer->id)
@@ -112,10 +161,11 @@ new #[Title('Customer Portal - Cahya Fresh')] class extends Component
             ]);
         }
         
-        $this->totalUnpaid = collect($this->unpaidOrders)->sum('total_amount');
-        $this->totalPiutang = collect($this->unpaidOrders)->sum('total_amount');
+        $this->totalUnpaid  = collect($this->unpaidOrders)->sum('remaining_balance');
+        $this->totalPiutang = collect($this->unpaidOrders)->sum('remaining_balance'); 
+        
         $this->totalDeposit = $this->customer->deposit_balance ?? 0; 
-        $this->totalKomisi = $this->customer->commission_balance ?? 0; 
+        $this->totalKomisi  = $this->customer->commission_balance ?? 0;
         
         $this->wallets = Wallet::where('business_id', $this->business->id)
             ->where('is_active', true)

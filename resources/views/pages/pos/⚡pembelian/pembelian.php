@@ -35,11 +35,11 @@ new #[Layout('layouts::pos')] class extends Component
             $this->cart[] = [
                 'product_id' => $product->id,
                 'name' => $product->name,
-                'price' => $product->cost_price ?? 0, 
+                'price' => $product->base_price ?? 0, 
                 'qty' => 1,
                 'unit_id' => null, 
-                'unit_name' => 'Satuan Dasar',
-                'base_cost' => $product->cost_price ?? 0,
+                'unit_name' => $product->base_unit ?? 'Pilih Satuan',
+                'base_cost' => $product->base_price ?? 0,
                 'available_units' => $product->units->toArray(),
             ];
         }

@@ -58,27 +58,62 @@
         <div class="absolute -bottom-10 -right-10 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl"></div>     
     </div>     
 
-    <div class="px-4 mt-6 shrink-0">         
-        <div class="flex p-1 bg-zinc-200 dark:bg-zinc-800 rounded-xl overflow-x-auto gap-1">             
+    <div class="px-4 mt-6 shrink-0"> 
+        <div class="flex p-1.5 bg-zinc-100 dark:bg-zinc-900/60 rounded-2xl overflow-x-auto gap-1 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"> 
+            
             <button @click="activeTab = 'unpaid'"                      
-                    :class="activeTab === 'unpaid' ? 'bg-white dark:bg-zinc-700 shadow text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:text-zinc-700'"                     
-                    class="flex-1 whitespace-nowrap py-2 px-3 text-[11px] sm:text-sm font-bold rounded-lg transition-all duration-200">                 
-                Tagihan ({{ count($unpaidOrders) }})             
+                    :class="activeTab === 'unpaid' ? 'bg-white dark:bg-zinc-800 shadow-sm text-blue-600 dark:text-blue-400 font-black' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 font-semibold'" 
+                    class="flex-1 flex items-center justify-center gap-1.5 whitespace-nowrap py-2.5 px-3.5 text-xs sm:text-sm rounded-xl transition-all duration-300 shrink-0">                 
+                <x-heroicon-o-document-text class="w-4 h-4" />
+                <span>Tagihan</span>
+                <span :class="activeTab === 'unpaid' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600' : 'bg-zinc-200/60 dark:bg-zinc-800 text-zinc-500'" 
+                      class="px-1.5 py-0.5 text-[10px] font-bold rounded-md transition-colors duration-300">
+                    {{ count($unpaidOrders) }}
+                </span>
             </button>             
+            
             <button @click="activeTab = 'draft'"                      
-                    :class="activeTab === 'draft' ? 'bg-white dark:bg-zinc-700 shadow text-amber-600 dark:text-amber-400' : 'text-zinc-500 hover:text-zinc-700'"                     
-                    class="flex-1 whitespace-nowrap py-2 px-3 text-[11px] sm:text-sm font-bold rounded-lg transition-all duration-200">                 
-                Disiapkan ({{ count($draftOrders) }})             
+                    :class="activeTab === 'draft' ? 'bg-white dark:bg-zinc-800 shadow-sm text-amber-600 dark:text-amber-400 font-black' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 font-semibold'" 
+                    class="flex-1 flex items-center justify-center gap-1.5 whitespace-nowrap py-2.5 px-3.5 text-xs sm:text-sm rounded-xl transition-all duration-300 shrink-0">                 
+                <x-heroicon-o-clock class="w-4 h-4" />
+                <span>Disiapkan</span>
+                <span :class="activeTab === 'draft' ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-600' : 'bg-zinc-200/60 dark:bg-zinc-800 text-zinc-500'" 
+                      class="px-1.5 py-0.5 text-[10px] font-bold rounded-md transition-colors duration-300">
+                    {{ count($draftOrders) }}
+                </span>
             </button>             
+            
             <button @click="activeTab = 'paid'"                      
-                    :class="activeTab === 'paid' ? 'bg-white dark:bg-zinc-700 shadow text-green-600 dark:text-green-400' : 'text-zinc-500 hover:text-zinc-700'"                     
-                    class="flex-1 whitespace-nowrap py-2 px-3 text-[11px] sm:text-sm font-bold rounded-lg transition-all duration-200">                 
-                Riwayat ({{ count($paidOrders) }})             
+                    :class="activeTab === 'paid' ? 'bg-white dark:bg-zinc-800 shadow-sm text-green-600 dark:text-green-400 font-black' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 font-semibold'" 
+                    class="flex-1 flex items-center justify-center gap-1.5 whitespace-nowrap py-2.5 px-3.5 text-xs sm:text-sm rounded-xl transition-all duration-300 shrink-0">                 
+                <x-heroicon-o-archive-box class="w-4 h-4" />
+                <span>Arsip</span>
+                <span :class="activeTab === 'paid' ? 'bg-green-50 dark:bg-green-900/30 text-green-600' : 'bg-zinc-200/60 dark:bg-zinc-800 text-zinc-500'" 
+                      class="px-1.5 py-0.5 text-[10px] font-bold rounded-md transition-colors duration-300">
+                    {{ count($paidOrders) }}
+                </span>
+            </button>
+
+            <button @click="activeTab = 'history'" 
+                    :class="activeTab === 'history' ? 'bg-white dark:bg-zinc-800 shadow-sm text-zinc-800 dark:text-zinc-100 font-black' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 font-semibold'"
+                    class="flex-1 flex items-center justify-center gap-1.5 whitespace-nowrap py-2.5 px-3.5 text-xs sm:text-sm rounded-xl transition-all duration-300 shrink-0">
+                <x-heroicon-o-arrows-right-left class="w-4 h-4" />
+                <span>Mutasi</span>
+                <span :class="activeTab === 'history' ? 'bg-zinc-100 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200' : 'bg-zinc-200/60 dark:bg-zinc-800 text-zinc-500'" 
+                      class="px-1.5 py-0.5 text-[10px] font-bold rounded-md transition-colors duration-300">
+                    {{ count($transactionHistory ?? []) }}
+                </span>
             </button>  
+
             <button @click="activeTab = 'commission'"                      
-                    :class="activeTab === 'commission' ? 'bg-white dark:bg-zinc-700 shadow text-purple-600 dark:text-purple-400' : 'text-zinc-500 hover:text-zinc-700'"                     
-                    class="flex-1 whitespace-nowrap py-2 px-3 text-[11px] sm:text-sm font-bold rounded-lg transition-all duration-200">                 
-                Komisi             
+                    :class="activeTab === 'commission' ? 'bg-white dark:bg-zinc-800 shadow-sm text-purple-600 dark:text-purple-400 font-black' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200 font-semibold'" 
+                    class="flex-1 flex items-center justify-center gap-1.5 whitespace-nowrap py-2.5 px-3.5 text-xs sm:text-sm rounded-xl transition-all duration-300 shrink-0">                 
+                <x-heroicon-o-gift class="w-4 h-4" />
+                <span>Komisi</span>
+                <span :class="activeTab === 'commission' ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600' : 'bg-zinc-200/60 dark:bg-zinc-800 text-zinc-500'" 
+                      class="px-1.5 py-0.5 text-[10px] font-bold rounded-md transition-colors duration-300">
+                    {{ count($commissionHistory ?? []) }}
+                </span>
             </button>       
         </div>     
     </div>     
@@ -205,6 +240,61 @@
                     <p class="font-bold">Belum ada riwayat transaksi lunas.</p>             
                 </div>         
             @endforelse     
+        </div>
+        <div x-show="activeTab === 'history'" style="display: none;" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" class="p-4 space-y-4">
+            
+            <div class="bg-zinc-50 dark:bg-zinc-900/40 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800/50">
+                <h3 class="font-black text-zinc-700 dark:text-zinc-300 text-sm">Rekening Koran Pelanggan</h3>
+                <p class="text-xs text-zinc-400 mt-0.5 font-medium">Memantau transparansi kronologis timbulnya tagihan belanja serta catatan cicilan dana yang masuk ke kasir.</p>
+            </div>
+
+            <div class="relative border-l-2 border-zinc-200 dark:border-zinc-700 ml-3.5 space-y-6 py-2">
+                @forelse($transactionHistory as $trx)
+                    <div class="relative pl-6">
+                        
+                        <span class="absolute -left-[11px] top-1 flex h-5 w-5 items-center justify-center rounded-full ring-4 ring-white dark:ring-zinc-900 
+                            {{ data_get($trx, 'type') === 'tagihan' ? 'bg-rose-500 text-white' : 'bg-green-500 text-white' }}">
+                            @if(data_get($trx, 'type') === 'tagihan')
+                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                            @else
+                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            @endif
+                        </span>
+
+                        <div class="bg-white dark:bg-zinc-800 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-700 shadow-xs flex justify-between items-center gap-4 transition hover:border-zinc-300 dark:hover:border-zinc-600">
+                            <div class="space-y-0.5">
+                                <div class="flex items-center gap-2">
+                                    <h4 class="font-bold text-sm text-zinc-800 dark:text-zinc-200">{{ data_get($trx, 'title') }}</h4>
+                                </div>
+                                <p class="text-[11px] text-zinc-400 font-medium">Tanggal: {{ \Carbon\Carbon::parse(data_get($trx, 'date'))->format('d M Y - H:i') }} WIB</p>
+                                <p class="text-xs text-zinc-500 dark:text-zinc-400 font-medium italic mt-1">{{ data_get($trx, 'note') }}</p>
+                            </div>
+
+                            <div class="text-right shrink-0">
+                                @if(data_get($trx, 'type') === 'tagihan')
+                                    <span class="text-base font-black text-rose-600 dark:text-rose-500">
+                                        +Rp {{ number_format(data_get($trx, 'amount'), 0, ',', '.') }}
+                                    </span>
+                                    <p class="text-[9px] font-black text-rose-500/70 uppercase tracking-wider mt-0.5">Hutang Bertambah</p>
+                                @else
+                                    <span class="text-base font-black text-green-600 dark:text-green-500">
+                                        -Rp {{ number_format(data_get($trx, 'amount'), 0, ',', '.') }}
+                                    </span>
+                                    <p class="text-[9px] font-black text-green-500/70 uppercase tracking-wider mt-0.5">Mengurangi Hutang</p>
+                                @endif
+                            </div>
+                        </div>
+
+                    </div>
+                @empty
+                    <div class="text-center py-16 opacity-50 pl-6">
+                        <x-heroicon-o-document-text class="w-12 h-12 mx-auto mb-2 text-zinc-400" />
+                        <p class="font-bold text-sm">Belum ada riwayat mutasi tagihan.</p>
+                        <p class="text-xs text-zinc-400 mt-0.5">Seluruh jejak transaksi invoice and cicilan Anda akan otomatis tercatat rapi di sini.</p>
+                    </div>
+                @endforelse
+            </div>
+
         </div>
         <div x-show="activeTab === 'commission'" style="display: none;" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" class="p-4 space-y-4">         
             
@@ -367,7 +457,10 @@
             <div class="max-w-md mx-auto">
                 <div class="flex justify-between items-end mb-2">
                     <div>
-                        <p class="text-[10px] uppercase font-bold tracking-wider text-rose-500 mb-1">Total Menunggu Pembayaran</p>
+                        <p class="text-[10px] uppercase font-black tracking-wider text-rose-500 mb-0.5 flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse"></span>
+                            <span>Total Sisa Tagihan</span>
+                        </p>
                         <h2 class="text-3xl font-black text-rose-600 dark:text-rose-500">Rp {{ number_format($totalUnpaid, 0, ',', '.') }}</h2>
                     </div>
                     <button @click="showPayment = !showPayment" class="flex items-center gap-1 text-xs font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 px-3 py-2 rounded-xl transition hover:bg-blue-100">
@@ -375,21 +468,23 @@
                         <x-heroicon-o-chevron-up class="w-4 h-4 transition-transform duration-300" x-bind:class="showPayment ? 'rotate-180' : ''" />
                     </button>
                 </div>
-                <div x-show="showPayment" x-collapse class="pt-3 border-t border-zinc-100 dark:border-zinc-700 mt-2">
+                
+                <div x-show="showPayment" x-collapse class="pt-3 border-t border-zinc-100 dark:border-zinc-700 mt-2" style="display: none;">
                     @if(count($wallets) > 0)
                         <div class="mb-4 p-3 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                            <p class="text-xs font-bold text-zinc-500 mb-2">Instruksi Transfer ke Rekening:</p>
-                            <div class="flex flex-col gap-2 max-h-40 overflow-y-auto pr-1">
+                            <p class="text-xs font-bold text-zinc-500 mb-2">Instruksi Transfer ke Rekening Toko:</p>
+                            
+                            <div class="flex flex-col gap-2 max-h-44 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-zinc-200 dark:[&::-webkit-scrollbar-thumb]:bg-zinc-700 [&::-webkit-scrollbar-thumb]:rounded-full">
                                 @foreach($wallets as $acc)
-                                    <div class="flex justify-between items-center bg-white dark:bg-zinc-800 p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 shadow-sm">
+                                    <div class="flex justify-between items-center bg-white dark:bg-zinc-800 p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 shadow-xs">
                                         <div>
-                                            <p class="text-sm font-black text-zinc-800 dark:text-zinc-200">{{ $acc->name }}</p>
-                                            <p class="text-xs font-mono text-zinc-500 dark:text-zinc-400">{{ $acc->account_number ?? '-' }}</p>
+                                            <p class="text-xs font-black text-zinc-800 dark:text-zinc-200">{{ $acc->name }}</p>
+                                            <p class="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">{{ $acc->account_number ?? '-' }}</p>
                                         </div>
                                         @if($acc->account_number)
-                                            <button onclick="navigator.clipboard.writeText('{{ $acc->account_number }}'); alert('Nomor Rekening {{ $acc->account_number }} berhasil disalin!');" class="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition flex items-center gap-1">
+                                            <button onclick="navigator.clipboard.writeText('{{ $acc->account_number }}'); alert('Nomor Rekening {{ $acc->account_number }} berhasil disalin!');" class="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 px-2.5 py-1.5 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition flex items-center gap-1">
                                                 <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                                                Salin Norek
+                                                <span>Salin</span>
                                             </button>
                                         @endif
                                     </div>
@@ -397,16 +492,23 @@
                             </div>
                         </div>
                     @endif
+                    
                     @php
-    $waNumber = $business->phone ?? '';
-    if (str_starts_with($waNumber, '0')) {
-        $waNumber = '62' . substr($waNumber, 1);
-    }
+                        $waNumber = $business->phone ?? '';
+                        if (str_starts_with($waNumber, '0')) {
+                            $waNumber = '62' . substr($waNumber, 1);
+                        }
+                        
+                        $listNotaText = collect($unpaidOrders)->pluck('order_number')->implode(', ');
+                        $templatePesan = "Halo Admin *" . $business->name . "*,\n\nSaya ingin konfirmasi pembayaran cicilan atas nama *" . $customer->name . "*.\n\n- *Total Sisa Tagihan:* Rp " . number_format($totalUnpaid, 0, ',', '.') . "\n- *Daftar Nota:* " . $listNotaText . "\n\nBerikut saya lampirkan bukti transfernya ya, mohon dicek. Terima kasih!";
                     @endphp
-                    <a href="https://wa.me/{{ $waNumber }}?text={{ urlencode('Halo Admin ' . $business->name . ', saya ingin konfirmasi pembayaran untuk tagihan atas nama ' . $customer->name) }}" target="_blank" class="w-full bg-green-500 hover:bg-green-600 text-white font-black py-3.5 rounded-xl shadow-md shadow-green-500/20 flex justify-center items-center gap-2 transition text-sm mt-3">
+                    
+                    <a href="https://wa.me/{{ $waNumber }}?text={{ urlencode($templatePesan) }}" target="_blank" class="w-full bg-green-500 hover:bg-green-600 text-white font-black py-3.5 rounded-xl shadow-md shadow-green-500/20 flex justify-center items-center gap-2 transition text-sm mt-3 animate-pulse">
                         <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-                        Konfirmasi Pembayaran via WhatsApp
+                        <span>Kirim Bukti Pembayaran ke WA</span>
                     </a>
+                </div>
+            </div>
          </div>
     @endif
 </div>
