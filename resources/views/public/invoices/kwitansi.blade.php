@@ -209,9 +209,6 @@
         </tr>
     </table>
 
-    <!-- ==========================================
-         HALAMAN 2 : SURAT JALAN (Pindah Halaman)
-         ========================================== -->
     <div class="page-break"></div>
     @php
         $gross_grand_total = 0;
@@ -222,7 +219,6 @@
     @endphp
     @php
 
-        // FUNGSI TERBILANG
         if (!function_exists('penyebut')) {
             function penyebut($nilai) {
                 $nilai = abs($nilai);
