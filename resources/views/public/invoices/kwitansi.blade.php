@@ -215,7 +215,7 @@
     <div class="page-break"></div>
     @php
         $gross_grand_total = 0;
-        foreach($order->items as $item) {
+        foreach($order->orderItems as $item) {
             $gross_grand_total += ($item->quantity * $item->unit_price);
         }
         $final_display_total = $order->total_amount;
