@@ -64,4 +64,10 @@ class InvoiceController extends Controller
         $data = $this->getInvoiceData($orderNumber);
         return view("public.invoices.batch-dotmatrix", $data);
     }
+
+    public function printKwitansi($orderNumber)
+    {
+        $data = $this->getInvoiceData($orderNumber);
+        return view("public.invoices.kwitansi", $data);
+    }
 }

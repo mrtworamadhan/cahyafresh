@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Customers\RelationManagers;
 
 use App\Filament\Resources\Customers\CustomerResource;
+use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\ViewAction;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -72,7 +73,12 @@ class OrdersRelationManager extends RelationManager
             ])
             ->defaultSort('created_at', 'desc')
             ->actions([
-                // Tombol View untuk melihat isi detail barang di dalam nota tersebut
+                Action::make('print_kwitansi')
+                    ->label('Cetak Kwitansi')
+                    ->icon('heroicon-o-printer')
+                    ->color('primary')
+                    ->url(fn ($record) => route('invoice.kwitansi', $record->order_number))
+                    ->openUrlInNewTab(),
                 ViewAction::make(),
             ]);
     }
