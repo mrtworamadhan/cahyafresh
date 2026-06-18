@@ -475,7 +475,38 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $ekuitasBuku = $modalAwal + $labaBersihSeumurHidup - $prive;
         
         $penyesuaianNeraca = $aktiva - ($kewajiban + $ekuitasBuku);
-
+        dd([
+            '1_AKTIVA' => [
+                'kas' => $kas,
+                'piutang_neraca' => $piutangNeraca,
+                'stok' => $stok,
+                'deposit_sup' => $depositSup,
+                'TOTAL_AKTIVA' => $aktiva,
+            ],
+            '2_KEWAJIBAN' => [
+                'hutang_usaha' => $hutangUsahaNeraca,
+                'deposit_pel' => $depositPel,
+                'hutang_komisi' => $hutangKomisi,
+                'hutang_ongkir' => $hutangOngkir,
+                'TOTAL_KEWAJIBAN' => $kewajiban,
+            ],
+            '3_EKUITAS_DAN_LABA_SEUMUR_HIDUP' => [
+                'modal_awal' => $modalAwal,
+                'prive' => $prive,
+                'omzet_barang_murni' => $omzetBarangMurni,
+                'omzet_ongkir_murni' => $omzetOngkirMurni,
+                'pendapatan_ledger_murni' => $pendapatanLedgerMurni,
+                'hpp_murni' => $hppMurni,
+                'total_beban_murni' => $totalBebanMurni,
+                'LABA_BERSIH_SEUMUR_HIDUP' => $labaBersihSeumurHidup,
+                'EKUITAS_BUKU' => $ekuitasBuku,
+            ],
+            '4_KESIMPULAN' => [
+                'TOTAL_AKTIVA' => $aktiva,
+                'TOTAL_PASIVA' => ($kewajiban + $ekuitasBuku),
+                'SELISIH' => $penyesuaianNeraca,
+            ]
+        ]);
         // ==============================================================
         // --- E. ANALISA USAHA ---
         // ==============================================================
