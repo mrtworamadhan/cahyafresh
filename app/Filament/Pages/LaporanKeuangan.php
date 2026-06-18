@@ -319,7 +319,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $endDate = ($this->data['end_date'] ?? now()->format('Y-m-d')) . ' 23:59:59';
 
         // ==============================================================
-        // --- A. LABA RUGI PERIODIK (FILTERED BY DATE RANGE PICKER) ---
+        // --- A. LABA RUGI PERIODIK (FILTERED BY DATE RANGE) ---
         // ==============================================================
         $omzetBarang = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('updated_at', [$startDate, $endDate])->sum(DB::raw('total_amount - shipping_fee_billed'));
         $omzetOngkir = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('updated_at', [$startDate, $endDate])->sum('shipping_fee_billed');
@@ -399,10 +399,10 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $netCashflow = $totalKasMasuk - $totalKasKeluar;
 
         // ==============================================================
-        // --- C. PIUTANG & HUTANG ---
+        // --- C. PIUTANG & HUTANG LIST (FOR VIEW REPEATER ONLY) ---
         // ==============================================================
         $piutangQuery = Order::with('customer')->where('business_id', $businessId)->where('status', 'completed')->whereIn('payment_status', ['unpaid', 'partial'])->get();
-        $piutangList = []; $totalPiutang = 0;
+        $piutangList = [];
         foreach ($piutangQuery as $order) {
             if ($order->remaining_balance > 0) { 
                 $piutangList[] = [
@@ -410,12 +410,11 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                     'order_number' => $order->order_number, 'customer' => $order->customer->name ?? 'Umum', 
                     'remaining_balance' => (float) $order->remaining_balance
                 ];
-                $totalPiutang += $order->remaining_balance;
             }
         }
 
         $hutangQuery = Purchase::with('supplier')->where('business_id', $businessId)->whereIn('status', ['unpaid', 'partial'])->get();
-        $hutangList = []; $totalHutang = 0;
+        $hutangList = [];
         foreach ($hutangQuery as $purchase) {
             if ($purchase->remaining_balance > 0) {
                 $hutangList[] = [
@@ -423,29 +422,25 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                     'invoice_number' => $purchase->invoice_number, 'supplier' => $purchase->supplier->name ?? 'Umum', 
                     'remaining_balance' => (float) $purchase->remaining_balance
                 ];
-                $totalHutang += $purchase->remaining_balance;
             }
         }
 
         // ==============================================================
-        // PERBAIKAN MUTAKHIR - D. NERACA SAKRAL (KUMULATIF SNAPSHOT SEUMUR HIDUP)
+        // FIXED NERACA SAKRAL (FORMULA KEMBAR 100% SINKRON DENGAN TERMINAL AUDIT)
         // ==============================================================
         $kas = Wallet::where('business_id', $businessId)->sum('balance');
         $stok = Product::where('business_id', $businessId)->sum(DB::raw('stock * base_price'));
         $depositSup = Supplier::where('business_id', $businessId)->sum('deposit_balance');
         
-        // Memaksa nilai piutang di Neraca dihitung seumur hidup murni tanpa batas range tanggal
+        // PERBAIKAN FIXED 1: Ambil hitungan total sisa piutang murni seumur hidup
         $piutangNeraca = Order::where('business_id', $businessId)->where('status', 'completed')->whereIn('payment_status', ['unpaid', 'partial'])->get()->sum('remaining_balance');
         $aktiva = $kas + $piutangNeraca + $stok + $depositSup;
 
+        // PERBAIKAN FIXED 2: Ambil hitungan total sisa hutang supplier murni seumur hidup
         $hutangUsahaNeraca = Purchase::where('business_id', $businessId)->whereIn('status', ['unpaid', 'partial'])->get()->sum('remaining_balance');
         $depositPel = Customer::where('business_id', $businessId)->sum('deposit_balance');
         $hutangKomisi = Customer::where('business_id', $businessId)->sum('commission_balance');
-        
-        $hutangOngkir = Delivery::where('business_id', $businessId)
-            ->where('is_paid_to_courier', false)
-            ->whereHas('order', function($q) { $q->where('status', 'completed'); })
-            ->sum('shipping_cost_actual');
+        $hutangOngkir = Delivery::where('business_id', $businessId)->where('is_paid_to_courier', false)->whereHas('order', function($q) { $q->where('status', 'completed'); })->sum('shipping_cost_actual');
 
         $kewajiban = $hutangUsahaNeraca + $depositPel + $hutangKomisi + $hutangOngkir;
         
@@ -455,11 +450,10 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $priveCategory = FinanceCategory::withoutGlobalScopes()->where('code', 'EQ_PRIVE')->first();
         $prive = Ledger::where('business_id', $businessId)->where('finance_category_id', $priveCategory?->id)->sum('amount');
 
-        // REKONSILIASI PENYELARASAN: Lepaskan filter tanggal seumur hidup untuk Laba Neraca agar klop dengan saldo Kas & Gudang saat ini
+        // REKONSILIASI LABA NERACA SEUMUR HIDUP SECARA PREMEDITATED
         $pendapatanLedgerMurni = Ledger::query()
             ->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
-            ->where('ledgers.business_id', $businessId)
-            ->where('ledgers.type', 'in')
+            ->where('ledgers.business_id', $businessId)->where('ledgers.type', 'in')
             ->whereIn('finance_categories.code', ['INC_GAIN', 'INC_OTHER'])
             ->sum('ledgers.amount');
 
@@ -475,8 +469,8 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             ->sum('ledgers.amount') + $bebanOngkirMurni;
 
         $labaBersihSeumurHidup = ($omzetBarangMurni + $omzetOngkirMurni + $pendapatanLedgerMurni - $hppMurni) - $totalBebanMurni;
-
         $ekuitasBuku = $modalAwal + $labaBersihSeumurHidup - $prive;
+        
         $penyesuaianNeraca = $aktiva - ($kewajiban + $ekuitasBuku);
 
         // ==============================================================
@@ -489,20 +483,20 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
 
         return [
             'omzet_barang' => (float)$omzetBarang, 'omzet_ongkir' => (float)$omzetOngkir, 'hpp' => (float)$hpp,
-            'laba_kotor' => (float)$labaKotor, 'rincian_beban' => $bebanList, 'total_beban' => (float)$totalBeban, 'laba_bersih' => (float)$labaBersihPeriodik,
+            'laba_kotor' => (float)$labaKotor, 'rincian_beban' => $bebanList, 'total_beban' => (float)$totalBeban, 'laba_chem' => (float)$labaBersihPeriodik, 'laba_bersih' => (float)$labaBersihPeriodik,
             
             'kas_masuk' => $kasMasukList, 'total_kas_masuk' => (float)$totalKasMasuk,
             'kas_keluar' => $kasKeluarList, 'total_kas_keluar' => (float)$totalKasKeluar,
             'net_cashflow' => (float)$netCashflow,
 
-            'piutang_list' => $piutangList, 'total_piutang' => (float)$totalPiutang,
-            'hutang_list' => $hutangList, 'total_hutang_usaha' => (float)$totalHutang,
+            'piutang_list' => $piutangList, 'total_piutang' => (float)$piutangNeraca,
+            'hutang_list' => $hutangList, 'total_hutang_usaha' => (float)$hutangUsahaNeraca,
 
-            'kas' => (float)$kas, 'piutang_neraca' => (float)$totalPiutang, 'stok' => (float)$stok, 'deposit_sup' => (float)$depositSup, 'total_aktiva' => (float)$aktiva,
-            'hutang_usaha_neraca' => (float)$totalHutang, 'deposit_pel' => (float)$depositPel, 'hutang_komisi' => (float)$hutangKomisi, 'hutang_ongkir' => (float)$hutangOngkir,
+            'kas' => (float)$kas, 'piutang_neraca' => (float)$piutangNeraca, 'stok' => (float)$stok, 'deposit_sup' => (float)$depositSup, 'total_aktiva' => (float)$aktiva,
+            'hutang_usaha_neraca' => (float)$hutangUsahaNeraca, 'deposit_pel' => (float)$depositPel, 'hutang_komisi' => (float)$hutangKomisi, 'hutang_ongkir' => (float)$hutangOngkir,
             
             'modal_awal' => (float)$modalAwal, 'laba_berjalan' => (float)$labaBersihSeumurHidup, 'prive' => (float)$prive, 'penyesuaian_neraca' => (float)$penyesuaianNeraca,
-            'total_pasiva' => (float)$aktiva, 'ekuitas' => (float)($aktiva - $kewajiban),
+            'total_pasiva' => (float)($kewajiban + $ekuitasBuku), 'ekuitas' => (float)($aktiva - $kewajiban),
 
             'profit_margin' => $profitMargin,
             'status_margin' => $profitMargin >= 10 ? 'Sangat Sehat' : ($profitMargin > 0 ? 'Kurang Ideal' : 'Rugi / Bahaya'),
