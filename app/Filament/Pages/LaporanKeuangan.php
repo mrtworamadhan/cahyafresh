@@ -370,13 +370,18 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
 
         // --- D. NERACA SAKRAL (GLOBAL) ---
         $kas = (float)Wallet::where('business_id', $businessId)->sum('balance');
-        $piutangNeraca = (float)Order::where('business_id', $businessId)->where('status', 'completed')->sum('remaining_balance');
+        $piutangNeraca = Order::where('business_id', $businessId)
+            ->where('status', 'completed')
+            ->get()
+            ->sum(fn($order) => $order->remaining_balance); // Menghitung via Accessor Model
         $stok = (float)Product::where('business_id', $businessId)->sum(DB::raw('GREATEST(stock, 0) * base_price')); // FIX: Stok minus dianggap 0
         $depositSup = (float)Supplier::where('business_id', $businessId)->sum('deposit_balance');
         
         $aktiva = $kas + $piutangNeraca + $stok + $depositSup;
 
-        $hutangUsahaNeraca = (float)Purchase::where('business_id', $businessId)->sum('remaining_balance');
+        $hutangUsahaNeraca = Purchase::where('business_id', $businessId)
+            ->get()
+            ->sum(fn($purchase) => $purchase->remaining_balance);
         $depositPel = (float)Customer::where('business_id', $businessId)->sum('deposit_balance');
         $hutangKomisi = (float)Customer::where('business_id', $businessId)->sum('commission_balance');
         $hutangOngkir = (float)Delivery::where('business_id', $businessId)->where('is_paid_to_courier', false)->whereHas('order', fn($q) => $q->where('status', 'completed'))->sum('shipping_cost_actual');
