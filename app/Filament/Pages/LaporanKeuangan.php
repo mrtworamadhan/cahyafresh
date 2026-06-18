@@ -12,7 +12,7 @@ use App\Models\Product;
 use App\Models\Customer;
 use App\Models\Supplier;
 use App\Models\FinanceCategory;
-use App\Models\Delivery; // <--- SUNTIKAN MODEL UNTUK TRACKING HUTANG ONGIR
+use App\Models\Delivery;
 
 use BackedEnum;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
@@ -54,7 +54,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
     protected static string|UnitEnum|null $navigationGroup = 'Keuangan';
     protected static ?int $navigationSort = 1;
     protected static ?string $navigationLabel = 'Laporan Keuangan';
-    protected static ?string $title = 'Laporan Keuangan Eksekutif';
+    protected static ?string $title = 'Laporan Keuangan Executive';
 
     protected string $view = 'filament.pages.laporan-keuangan';
 
@@ -259,8 +259,6 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                             TextEntry::make('hutang_usaha_neraca')->label('Hutang Usaha (Ke Supplier)')->money('IDR')->color('danger'),
                                             TextEntry::make('deposit_pel')->label('Titipan Deposit Konsumen')->money('IDR')->color('danger'),
                                             TextEntry::make('hutang_komisi')->label('Hutang Komisi & Referral')->money('IDR')->color('danger'),
-                                            
-                                            // PERBAIKAN TAMPILAN: Menampilkan Akun Hutang Kurir di Layar Pasiva Neraca
                                             TextEntry::make('hutang_ongkir')->label('Hutang Ongkir & Kurir (Belum Rilis)')->money('IDR')->color('danger'),
                                             
                                             TextEntry::make('modal_awal')->label('Modal Awal / Suntikan Disetor')->money('IDR')->color('info'),
@@ -321,12 +319,11 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $endDate = ($this->data['end_date'] ?? now()->format('Y-m-d')) . ' 23:59:59';
 
         // ==============================================================
-        // --- A. LABA RUGI PERIODIK (FILTERED BY DATE) ---
+        // --- A. LABA RUGI PERIODIK (FILTERED BY DATE RANGE PICKER) ---
         // ==============================================================
         $omzetBarang = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('updated_at', [$startDate, $endDate])->sum(DB::raw('total_amount - shipping_fee_billed'));
         $omzetOngkir = Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('updated_at', [$startDate, $endDate])->sum('shipping_fee_billed');
         
-        // PERBAIKAN: Menarik Pendapatan Non-Penjualan (Opname Lebih/INC_OTHER) Periodik dari Ledger
         $pendapatanLedgerPeriodik = Ledger::query()
             ->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
             ->where('ledgers.business_id', $businessId)
@@ -368,7 +365,6 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             $totalBeban += $beban->total;
         }
 
-        // PERBAIKAN: Menambahkan unsur pendapatan ledger periodik ke dalam Gross & Net Profit
         $labaKotor = ($omzetBarang + $omzetOngkir + $pendapatanLedgerPeriodik) - $hpp;
         $labaBersihPeriodik = $labaKotor - $totalBeban;
 
@@ -432,13 +428,17 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         }
 
         // ==============================================================
-        // --- D. NERACA SAKRAL (KUMULATIF SEUMUR HIDUP HINGGA END_DATE) ---
+        // PERBAIKAN MUTAKHIR - D. NERACA SAKRAL (KUMULATIF SNAPSHOT SEUMUR HIDUP)
         // ==============================================================
         $kas = Wallet::where('business_id', $businessId)->sum('balance');
         $stok = Product::where('business_id', $businessId)->sum(DB::raw('stock * base_price'));
         $depositSup = Supplier::where('business_id', $businessId)->sum('deposit_balance');
-        $aktiva = $kas + $totalPiutang + $stok + $depositSup;
+        
+        // Memaksa nilai piutang di Neraca dihitung seumur hidup murni tanpa batas range tanggal
+        $piutangNeraca = Order::where('business_id', $businessId)->where('status', 'completed')->whereIn('payment_status', ['unpaid', 'partial'])->get()->sum('remaining_balance');
+        $aktiva = $kas + $piutangNeraca + $stok + $depositSup;
 
+        $hutangUsahaNeraca = Purchase::where('business_id', $businessId)->whereIn('status', ['unpaid', 'partial'])->get()->sum('remaining_balance');
         $depositPel = Customer::where('business_id', $businessId)->sum('deposit_balance');
         $hutangKomisi = Customer::where('business_id', $businessId)->sum('commission_balance');
         
@@ -447,7 +447,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             ->whereHas('order', function($q) { $q->where('status', 'completed'); })
             ->sum('shipping_cost_actual');
 
-        $kewajiban = $totalHutang + $depositPel + $hutangKomisi + $hutangOngkir;
+        $kewajiban = $hutangUsahaNeraca + $depositPel + $hutangKomisi + $hutangOngkir;
         
         $modalCategory = FinanceCategory::withoutGlobalScopes()->where('code', 'EQ_MODAL')->first();
         $modalAwal = Ledger::where('business_id', $businessId)->where('finance_category_id', $modalCategory?->id)->sum('amount');
@@ -455,27 +455,25 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $priveCategory = FinanceCategory::withoutGlobalScopes()->where('code', 'EQ_PRIVE')->first();
         $prive = Ledger::where('business_id', $businessId)->where('finance_category_id', $priveCategory?->id)->sum('amount');
 
-        // PERBAIKAN UTAMA: Menarik data bonus keuntungan opname (INC_GAIN & INC_OTHER) seumur hidup
+        // REKONSILIASI PENYELARASAN: Lepaskan filter tanggal seumur hidup untuk Laba Neraca agar klop dengan saldo Kas & Gudang saat ini
         $pendapatanLedgerMurni = Ledger::query()
             ->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
             ->where('ledgers.business_id', $businessId)
             ->where('ledgers.type', 'in')
             ->whereIn('finance_categories.code', ['INC_GAIN', 'INC_OTHER'])
-            ->where('ledgers.transaction_date', '<=', $endDate)
             ->sum('ledgers.amount');
 
-        $omzetBarangMurni = Order::where('business_id', $businessId)->where('status', 'completed')->where('updated_at', '<=', $endDate)->sum(DB::raw('total_amount - shipping_fee_billed'));
-        $omzetOngkirMurni = Order::where('business_id', $businessId)->where('status', 'completed')->where('updated_at', '<=', $endDate)->sum('shipping_fee_billed');
-        $bebanOngkirMurni = Ledger::where('business_id', $businessId)->where('finance_category_id', $shippingCategory?->id)->where('transaction_date', '<=', $endDate)->sum('amount');
-        $hppMurni = OrderItem::whereHas('order', function($q) use ($businessId, $endDate) { $q->where('business_id', $businessId)->where('status', 'completed')->where('updated_at', '<=', $endDate); })->sum(DB::raw('base_price * (qty_billed + qty_bonus)'));
+        $omzetBarangMurni = Order::where('business_id', $businessId)->where('status', 'completed')->sum(DB::raw('total_amount - shipping_fee_billed'));
+        $omzetOngkirMurni = Order::where('business_id', $businessId)->where('status', 'completed')->sum('shipping_fee_billed');
+        $bebanOngkirMurni = Ledger::where('business_id', $businessId)->where('finance_category_id', $shippingCategory?->id)->sum('amount');
+        $hppMurni = OrderItem::whereHas('order', function($q) use ($businessId) { $q->where('business_id', $businessId)->where('status', 'completed'); })->sum(DB::raw('base_price * (qty_billed + qty_bonus)'));
         
         $totalBebanMurni = Ledger::query()
             ->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
-            ->where('ledgers.business_id', $businessId)->where('ledgers.type', 'out')->where('ledgers.transaction_date', '<=', $endDate)
+            ->where('ledgers.business_id', $businessId)->where('ledgers.type', 'out')
             ->whereNotIn('finance_categories.code', ['EXP_PURCHASE', 'LIA_AP', 'ASSET_DEP_SUPPLIER', 'OP_SHIPPING', 'LIA_COMMISSION_PAID', 'LIA_SHIPPING_PAID', 'LIA_CSR_ZAKAT_PAID', 'EQ_MODAL', 'EQ_PRIVE'])
             ->sum('ledgers.amount') + $bebanOngkirMurni;
 
-        // PERBAIKAN SAKRAL: Menambahkan $pendapatanLedgerMurni ke hitungan laba seumur hidup pasiva neraca
         $labaBersihSeumurHidup = ($omzetBarangMurni + $omzetOngkirMurni + $pendapatanLedgerMurni - $hppMurni) - $totalBebanMurni;
 
         $ekuitasBuku = $modalAwal + $labaBersihSeumurHidup - $prive;
