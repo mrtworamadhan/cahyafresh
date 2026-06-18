@@ -319,7 +319,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $endDate = ($this->data['end_date'] ?? now()->format('Y-m-d')) . ' 23:59:59';
 
         // ==============================================================
-        // --- A. LABA RUGI PERIODIK ---
+        // --- A. LABA RUGI PERIODIK (FILTERED BY DATE RANGE) ---
         // ==============================================================
         $omzetBarang = (float) Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('updated_at', [$startDate, $endDate])->sum(DB::raw('total_amount - shipping_fee_billed'));
         $omzetOngkir = (float) Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('updated_at', [$startDate, $endDate])->sum('shipping_fee_billed');
@@ -432,13 +432,18 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         }
 
         // ==============================================================
-        // FIXED NERACA SAKRAL
+        // FIXED NERACA SAKRAL (VALUASI INVENTORY ADAPTIF)
         // ==============================================================
         $kas = (float) Wallet::where('business_id', $businessId)->sum('balance');
         $depositSup = (float) Supplier::where('business_id', $businessId)->sum('deposit_balance');
         
+        // 1. STOK FISIK (Realita Gudang - Ini yang akan Tampil di Neraca)
+        // Jika minus, kita paksa tampil 0 agar laporan tidak aneh.
+        $stokFisikRaw = (float) Product::where('business_id', $businessId)->sum(DB::raw('stock * base_price'));
+        $stokFisik = max(0, $stokFisikRaw);
+
+        // 2. STOK AKUNTANSI (Teori Purchase - HPP + SO)
         $totalInvoicePurchase = (float) Purchase::where('business_id', $businessId)->sum('total_amount');
-        
         $hppMurni = (float) OrderItem::whereHas('order', function($q) use ($businessId) { 
             $q->where('business_id', $businessId)->where('status', 'completed'); 
         })->sum(DB::raw('base_price * (qty_billed + qty_bonus)'));
@@ -449,9 +454,14 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $ledgerLoss = (float) Ledger::where('business_id', $businessId)->where('finance_category_id', $catLossId)->where('type', 'out')->sum('amount');
         $netOpname = $ledgerGain - $ledgerLoss;
 
-        $stok = max(0, $totalInvoicePurchase - $hppMurni + $netOpname);
+        $stokAkuntansi = max(0, $totalInvoicePurchase - $hppMurni + $netOpname);
+
+        // 3. SELISIH VALUASI (Penyusutan / Selisih Harga Base Price)
+        // Ini adalah selisih antara nilai ideal pembukuan vs nilai barang yang beneran ada.
+        $penyesuaianStok = $stokAkuntansi - $stokFisik;
         
-        $aktiva = $kas + $piutangNeraca + $stok + $depositSup;
+        // 4. AKTIVA AKHIR (Menggunakan Stok Fisik Gudang Asli)
+        $aktiva = $kas + $piutangNeraca + $stokFisik + $depositSup;
 
         $depositPel = (float) Customer::where('business_id', $businessId)->sum('deposit_balance');
         $hutangKomisi = (float) Customer::where('business_id', $businessId)->sum('commission_balance');
@@ -481,7 +491,10 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             ->whereNotIn('finance_categories.code', ['EXP_PURCHASE', 'LIA_AP', 'ASSET_DEP_SUPPLIER', 'OP_SHIPPING', 'LIA_COMMISSION_PAID', 'LIA_SHIPPING_PAID', 'LIA_CSR_ZAKAT_PAID', 'EQ_MODAL', 'EQ_PRIVE'])
             ->sum('ledgers.amount') + $bebanOngkirMurni;
 
-        $labaBersihSeumurHidup = ($omzetBarangMurni + $omzetOngkirMurni + $pendapatanLedgerMurni - $hppMurni) - $totalBebanMurni;
+        // 5. PENYESUAIAN LABA
+        // Selisih stok tadi (Si Hantu) dibebankan sebagai pengurang Laba Berjalan agar neraca tidak pincang.
+        $labaBersihSeumurHidup = ($omzetBarangMurni + $omzetOngkirMurni + $pendapatanLedgerMurni - $hppMurni) - $totalBebanMurni - $penyesuaianStok;
+        
         $ekuitasBuku = $modalAwal + $labaBersihSeumurHidup - $prive;
         
         $penyesuaianNeraca = $aktiva - ($kewajiban + $ekuitasBuku);
@@ -505,7 +518,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             'piutang_list' => $piutangList, 'total_piutang' => (float)$piutangNeraca,
             'hutang_list' => $hutangList, 'total_hutang_usaha' => (float)$hutangUsahaNeraca,
 
-            'kas' => (float)$kas, 'piutang_neraca' => (float)$piutangNeraca, 'stok' => (float)$stok, 'deposit_sup' => (float)$depositSup, 'total_aktiva' => (float)$aktiva,
+            'kas' => (float)$kas, 'piutang_neraca' => (float)$piutangNeraca, 'stok' => (float)$stokFisik, 'deposit_sup' => (float)$depositSup, 'total_aktiva' => (float)$aktiva,
             'hutang_usaha_neraca' => (float)$hutangUsahaNeraca, 'deposit_pel' => (float)$depositPel, 'hutang_komisi' => (float)$hutangKomisi, 'hutang_ongkir' => (float)$hutangOngkir,
             
             'modal_awal' => (float)$modalAwal, 'laba_berjalan' => (float)$labaBersihSeumurHidup, 'prive' => (float)$prive, 'penyesuaian_neraca' => (float)$penyesuaianNeraca,
