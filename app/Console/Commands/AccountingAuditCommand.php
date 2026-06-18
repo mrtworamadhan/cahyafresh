@@ -22,7 +22,7 @@ class AccountingAuditCommand extends Command
         $this->info('🔍 MEMULAI AUDIT FORENSIK TRANSAKSI KEUANGAN...');
         $this->info('======================================================');
 
-        $businessId = auth()->user()?->businesses()?->first()?->id ?? 1; // Sesuaikan default tenant lu
+        $businessId = auth()->user()?->businesses()?->first()?->id ?? 1; // Default tenant
         $hasLeak = false;
 
         // ------------------------------------------------------------------
@@ -32,7 +32,6 @@ class AccountingAuditCommand extends Command
         $wallets = Wallet::all();
         
         foreach ($wallets as $wallet) {
-            // Hitung berapa seharusnya saldo berdasarkan mutasi Ledger masuk - keluar
             $cashIn = Ledger::where('wallet_id', $wallet->id)->where('type', 'in')->sum('amount');
             $cashOut = Ledger::where('wallet_id', $wallet->id)->where('type', 'out')->sum('amount');
             $expectedBalance = $cashIn - $cashOut;
@@ -62,13 +61,11 @@ class AccountingAuditCommand extends Command
             $customers = Customer::where('commission_balance', '>', 0)->get();
             
             foreach ($customers as $customer) {
-                // Total Komisi yang didapat (Gantung Phase 1)
                 $totalEarned = Ledger::where('contact_id', $customer->id)
                     ->where('contact_type', Customer::class)
                     ->where('finance_category_id', $catOpCommission)
                     ->sum('amount');
 
-                // Total Komisi yang sudah dicairkan tunai (Phase 2)
                 $totalWithdrawn = Ledger::where('contact_id', $customer->id)
                     ->where('contact_type', Customer::class)
                     ->where('finance_category_id', $catLiaCommPaid)
@@ -97,13 +94,10 @@ class AccountingAuditCommand extends Command
         $catLiaShipPaid = FinanceCategory::withoutGlobalScopes()->where('code', 'LIA_SHIPPING_PAID')->first()?->id;
 
         if ($catOpShipping && $catLiaShipPaid) {
-            // Hitung total pengakuan beban kurir seumur hidup
             $totalBebanKurir = Ledger::where('finance_category_id', $catOpShipping)->sum('amount');
-            // Hitung total rilis uang cash ke kurir seumur hidup
             $totalRilisKurir = Ledger::where('finance_category_id', $catLiaShipPaid)->sum('amount');
             $expectedHutangOngkir = $totalBebanKurir - $totalRilisKurir;
 
-            // Hitung sisa manifest surat jalan yang belum dibayar di tabel logistik
             $realHutangOngkir = Delivery::where('is_paid_to_courier', false)
                 ->whereHas('order', function($q) { $q->where('status', 'completed'); })
                 ->sum('shipping_cost_actual');
@@ -133,21 +127,15 @@ class AccountingAuditCommand extends Command
 
         $phantomCount = 0;
         foreach ($phantomTransfers as $outLedger) {
-            
-            // PERBAIKAN: Paksa teks tanggal berubah menjadi Objek Carbon secara aman
             $txDate = \Carbon\Carbon::parse($outLedger->transaction_date);
             $startTime = $txDate->copy()->subSeconds(5);
             $endTime = $txDate->copy()->addSeconds(5);
 
-            // Cari pasangan 'in' yang nominal dan detiknya mirip (toleransi 5 detik)
             $hasPair = Ledger::whereNull('finance_category_id')
                 ->where('type', 'in')
                 ->where('amount', $outLedger->amount)
                 ->where('wallet_id', '!=', $outLedger->wallet_id)
-                ->whereBetween('transaction_date', [
-                    $startTime, 
-                    $endTime
-                ])
+                ->whereBetween('transaction_date', [$startTime, $endTime])
                 ->exists();
 
             if (!$hasPair) {
@@ -165,12 +153,71 @@ class AccountingAuditCommand extends Command
         }
 
         // ------------------------------------------------------------------
+        // SUNTIKAN BARU - TES 5: AUDIT INTEGRITAS JURNAL STOCK OPNAME (SO)
+        // ------------------------------------------------------------------
+        $this->comment("\n" . '5. Memeriksa Integritas Jurnal Penyesuaian Stock Opname (SO)...');
+        $opnameClass = 'App\Models\StockOpname'; // Sesuaikan namespace model SO lu
+
+        if (class_exists($opnameClass)) {
+            $catLossId = FinanceCategory::withoutGlobalScopes()->where('code', 'EXP_LOSS')->first()?->id;
+            $catGainId = FinanceCategory::withoutGlobalScopes()->where('code', 'INC_GAIN')->first()?->id;
+
+            $allOpnames = $opnameClass::with('items')->get();
+            $soLeakCount = 0;
+
+            foreach ($allOpnames as $opname) {
+                $seharusnyaKeuntungan = 0;
+                $seharusnyaKerugian = 0;
+
+                foreach ($opname->items as $item) {
+                    $val = (float)$item->adjustment_value;
+                    if ($val > 0) $seharusnyaKeuntungan += $val;
+                    if ($val < 0) $seharusnyaKerugian += abs($val);
+                }
+
+                // Hitung riil yang tercatat di ledger penyesuaian SO terkait
+                $realitaLedgerLoss = Ledger::where('reference_type', $opnameClass)
+                    ->where('reference_id', $opname->id)
+                    ->where('finance_category_id', $catLossId)
+                    ->where('type', 'out')
+                    ->sum('amount');
+
+                $realitaLedgerGain = Ledger::where('reference_type', $opnameClass)
+                    ->where('reference_id', $opname->id)
+                    ->where('finance_category_id', $catGainId)
+                    ->where('type', 'in')
+                    ->sum('amount');
+
+                $isPincangLoss = abs($seharusnyaKerugian - $realitaLedgerLoss) > 0.01;
+                $isPincangGain = abs($seharusnyaKeuntungan - $realitaLedgerGain) > 0.01;
+
+                if ($isPincangLoss || $isPincangGain) {
+                    $this->error("❌ [BOCOR] Dokumen Stock Opname ID #{$opname->id} Pincang!");
+                    $this->line("   - Keterangan SO         : " . ($opname->notes ?? 'SO Tanpa Catatan'));
+                    $this->line("   - Keuntungan Seharusnya : Rp " . number_format($seharusnyaKeuntungan, 2, ',', '.'));
+                    $this->line("   - Keuntungan di Ledger  : Rp " . number_format($realitaLedgerGain, 2, ',', '.'));
+                    $this->line("   - Kerugian Seharusnya   : Rp " . number_format($seharusnyaKerugian, 2, ',', '.'));
+                    $this->line("   - Kerugian di Ledger    : Rp " . number_format($realitaLedgerLoss, 2, ',', '.'));
+                    $this->line("   💡 Solusi: Jalankan perintah 'php artisan accounting:heal' untuk menambal otomatis.");
+                    $soLeakCount++;
+                    $hasLeak = true;
+                }
+            }
+
+            if ($soLeakCount === 0) {
+                $this->info("✅ [PASS] Seluruh jurnal penyesuaian Stock Opname terisi klop dan seimbang.");
+            }
+        } else {
+            $this->line("💡 Info: Model StockOpname tidak ditemukan, melewati audit SO.");
+        }
+
+        // ------------------------------------------------------------------
         // KESIMPULAN AUDIT
         // ------------------------------------------------------------------
         $this->line("\n======================================================");
         if ($hasLeak) {
             $this->error("🚨 KESIMPULAN: DITEMUKAN KEBOCORAN HISTORIS DATA!");
-            $this->line("   Silakan perbaiki poin-poin merah di atas langsung di database.");
+            $this->line("   Silakan perbaiki poin-poin merah di atas langsung menggunakan command heal.");
         } else {
             $this->info("🎉 KESIMPULAN: CORE DATABASE LU SUDAH 100% STERIL & SEHAT!");
             $this->line("   Jika neraca masih selisih, periksa rumus penjumlahan di file LaporanKeuangan.php.");
