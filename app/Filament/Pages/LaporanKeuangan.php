@@ -68,6 +68,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             'start_date' => now()->startOfMonth()->format('Y-m-d'),
             'end_date' => now()->format('Y-m-d'),
         ]);
+        $this->data = $this->getLiveData();
     }
 
     protected function getHeaderActions(): array
@@ -303,12 +304,10 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             ]);
     }
 
-    protected function getReportData(): array
+    public function getReportData(): array
     {
-        $mode = $this->data['report_mode'] ?? 'live';
-        if ($mode === 'live') return $this->getLiveData();
-        $arsip = MonthlyClosing::find($mode);
-        return $arsip ? $arsip->snapshot_data : $this->getLiveData();
+        // Hapus/Bersihkan state lama agar memaksa pengambilan data baru dari database
+        return $this->getLiveData();
     }
 
     protected function getLiveData(): array
