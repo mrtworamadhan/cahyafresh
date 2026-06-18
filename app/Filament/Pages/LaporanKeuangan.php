@@ -401,7 +401,6 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         // ==============================================================
         // --- C. PIUTANG & HUTANG LIST (FOR VIEW REPEATER ONLY) ---
         // ==============================================================
-        // FIX: Hapus whereIn status untuk mendeteksi piutang gantung yang lolos, jumlahkan nilai saat looping
         $piutangQuery = Order::with('customer')->where('business_id', $businessId)->where('status', 'completed')->get();
         $piutangList = [];
         $piutangNeraca = 0; 
@@ -436,9 +435,27 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         // FIXED NERACA SAKRAL (FORMULA KEMBAR 100% SINKRON DENGAN TERMINAL AUDIT)
         // ==============================================================
         $kas = (float) Wallet::where('business_id', $businessId)->sum('balance');
-        $stok = (float) Product::where('business_id', $businessId)->sum(DB::raw('stock * base_price'));
         $depositSup = (float) Supplier::where('business_id', $businessId)->sum('deposit_balance');
         
+        // 1. Deklarasi HPP Murni (Dinaikkan agar bisa dipakai rumus Stok)
+        $hppMurni = (float) OrderItem::whereHas('order', function($q) use ($businessId) { 
+            $q->where('business_id', $businessId)->where('status', 'completed'); 
+        })->sum(DB::raw('base_price * (qty_billed + qty_bonus)'));
+
+        // 2. Deklarasi Total Pembelian dengan Filter Tenant
+        $totalInvoicePurchase = (float) Purchase::where('business_id', $businessId)->sum('total_amount');
+
+        // 3. Deklarasi Net Opname (Filter Ledger masuk dikurangi keluar untuk Opname)
+        // Pastikan 'INV_OPNAME' sesuai dengan kode kategori di database Anda.
+        $opnameCategoryIds = FinanceCategory::withoutGlobalScopes()->whereIn('code', ['INV_OPNAME', 'ADJ_STOK', 'OPNAME'])->pluck('id');
+        $opnameIn = (float) Ledger::where('business_id', $businessId)->where('type', 'in')->whereIn('finance_category_id', $opnameCategoryIds)->sum('amount');
+        $opnameOut = (float) Ledger::where('business_id', $businessId)->where('type', 'out')->whereIn('finance_category_id', $opnameCategoryIds)->sum('amount');
+        $netOpname = $opnameIn - $opnameOut;
+
+        // 4. Implementasi Rumus Stok Identik dengan Audit
+        $stok = max(0, $totalInvoicePurchase - $hppMurni + $netOpname);
+        
+        // 5. Kalkulasi Aktiva Akhir
         $aktiva = $kas + $piutangNeraca + $stok + $depositSup;
 
         $depositPel = (float) Customer::where('business_id', $businessId)->sum('deposit_balance');
@@ -463,7 +480,6 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $omzetBarangMurni = (float) Order::where('business_id', $businessId)->where('status', 'completed')->sum(DB::raw('total_amount - shipping_fee_billed'));
         $omzetOngkirMurni = (float) Order::where('business_id', $businessId)->where('status', 'completed')->sum('shipping_fee_billed');
         $bebanOngkirMurni = (float) Ledger::where('business_id', $businessId)->where('finance_category_id', $shippingCategory?->id)->sum('amount');
-        $hppMurni = (float) OrderItem::whereHas('order', function($q) use ($businessId) { $q->where('business_id', $businessId)->where('status', 'completed'); })->sum(DB::raw('base_price * (qty_billed + qty_bonus)'));
         
         $totalBebanMurni = (float) Ledger::query()
             ->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
@@ -475,38 +491,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $ekuitasBuku = $modalAwal + $labaBersihSeumurHidup - $prive;
         
         $penyesuaianNeraca = $aktiva - ($kewajiban + $ekuitasBuku);
-        dd([
-            '1_AKTIVA' => [
-                'kas' => $kas,
-                'piutang_neraca' => $piutangNeraca,
-                'stok' => $stok,
-                'deposit_sup' => $depositSup,
-                'TOTAL_AKTIVA' => $aktiva,
-            ],
-            '2_KEWAJIBAN' => [
-                'hutang_usaha' => $hutangUsahaNeraca,
-                'deposit_pel' => $depositPel,
-                'hutang_komisi' => $hutangKomisi,
-                'hutang_ongkir' => $hutangOngkir,
-                'TOTAL_KEWAJIBAN' => $kewajiban,
-            ],
-            '3_EKUITAS_DAN_LABA_SEUMUR_HIDUP' => [
-                'modal_awal' => $modalAwal,
-                'prive' => $prive,
-                'omzet_barang_murni' => $omzetBarangMurni,
-                'omzet_ongkir_murni' => $omzetOngkirMurni,
-                'pendapatan_ledger_murni' => $pendapatanLedgerMurni,
-                'hpp_murni' => $hppMurni,
-                'total_beban_murni' => $totalBebanMurni,
-                'LABA_BERSIH_SEUMUR_HIDUP' => $labaBersihSeumurHidup,
-                'EKUITAS_BUKU' => $ekuitasBuku,
-            ],
-            '4_KESIMPULAN' => [
-                'TOTAL_AKTIVA' => $aktiva,
-                'TOTAL_PASIVA' => ($kewajiban + $ekuitasBuku),
-                'SELISIH' => $penyesuaianNeraca,
-            ]
-        ]);
+
         // ==============================================================
         // --- E. ANALISA USAHA ---
         // ==============================================================
