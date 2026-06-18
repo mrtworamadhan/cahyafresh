@@ -125,41 +125,38 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             ->schema([
                 Tabs::make('LaporanTabs')
                     ->tabs([
-                        // ==========================================
-                        // TAB 1: LABA RUGI
-                        // ==========================================
-                        Tab::make('Laba / Rugi')
-                            ->icon('heroicon-o-document-currency-dollar')
+                        Section::make('Pendapatan & Harga Pokok')
                             ->schema([
-                                Section::make('Pendapatan & Harga Pokok')
-                                    ->schema([
-                                        TextEntry::make('omzet_barang')->label('Pendapatan Penjualan')->money('IDR')->color('success'),
-                                        TextEntry::make('omzet_ongkir')->label('Pendapatan Ongkir')->money('IDR')->color('success'),
-                                        TextEntry::make('hpp')->label('Harga Pokok Penjualan (HPP)')->money('IDR')->color('danger'),
-                                        TextEntry::make('laba_kotor')->label('Laba Kotor (Gross Profit)')->money('IDR')->weight('black')->size(TextSize::Large),
-                                    ])->columns(2),
+                                TextEntry::make('omzet_barang')->label('Pendapatan Penjualan')->money('IDR')->color('success'),
+                                TextEntry::make('omzet_ongkir')->label('Pendapatan Ongkir')->money('IDR')->color('success'),
+                                // BARIS BARU: Memunculkan pendapatan SO / Keuntungan Lainnya
+                                TextEntry::make('pendapatan_lain')->label('Pendapatan Lain & Opname Stok')->money('IDR')->color('success'),
+                                TextEntry::make('hpp')->label('Harga Pokok Penjualan (HPP)')->money('IDR')->color('danger'),
+                                TextEntry::make('laba_kotor')->label('Laba Kotor (Gross Profit)')->money('IDR')->weight('black')->size(TextSize::Large),
+                            ])->columns(2),
 
-                                Section::make('Rincian Beban Operasional')
+                        Section::make('Rincian Beban Operasional')
+                            ->schema([
+                                RepeatableEntry::make('rincian_beban')
+                                    ->label('')
                                     ->schema([
-                                        RepeatableEntry::make('rincian_beban')
-                                            ->label('')
-                                            ->schema([
-                                                TextEntry::make('name')->label('Kategori Beban')->weight('bold'),
-                                                TextEntry::make('amount')->label('Nominal Beban')->money('IDR')->color('danger')->weight('bold'),
-                                            ])->columns(2)
-                                    ]),
-
-                                Section::make('Kesimpulan')
-                                    ->schema([
-                                        TextEntry::make('total_beban')->label('Total Beban Operasional')->money('IDR')->color('danger'),
-                                        TextEntry::make('laba_bersih')
-                                            ->label('LABA BERSIH (NET PROFIT)')
-                                            ->money('IDR')
-                                            ->weight('black')
-                                            ->size(TextSize::Large)
-                                            ->color(fn ($state) => $state >= 0 ? 'success' : 'danger'),
-                                    ])->columns(2),
+                                        TextEntry::make('name')->label('Kategori Beban')->weight('bold'),
+                                        TextEntry::make('amount')->label('Nominal Beban')->money('IDR')->color('danger')->weight('bold'),
+                                    ])->columns(2)
                             ]),
+
+                        Section::make('Kesimpulan')
+                            ->schema([
+                                TextEntry::make('total_beban')->label('Total Beban Operasional')->money('IDR')->color('danger'),
+                                // BARIS BARU: Penyesuaian Valuasi di Kesimpulan
+                                TextEntry::make('penyesuaian_stok')->label('Penyesuaian Valuasi Persediaan')->money('IDR')->color('warning')->helperText('Penyesuaian nilai antara fisik dan pembukuan.'),
+                                TextEntry::make('laba_bersih')
+                                    ->label('LABA BERSIH (NET PROFIT)')
+                                    ->money('IDR')
+                                    ->weight('black')
+                                    ->size(TextSize::Large)
+                                    ->color(fn ($state) => $state >= 0 ? 'success' : 'danger'),
+                            ])->columns(2),
 
                         // ==========================================
                         // TAB 2: ARUS KAS
@@ -236,9 +233,6 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                     ])->columns(4)
                             ]),
 
-                        // ==========================================
-                        // TAB 5: NERACA
-                        // ==========================================
                         Tab::make('Neraca (Balance Sheet)')
                             ->icon('heroicon-o-scale')
                             ->schema([
@@ -263,6 +257,8 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                             
                                             TextEntry::make('modal_awal')->label('Modal Awal / Suntikan Disetor')->money('IDR')->color('info'),
                                             TextEntry::make('laba_berjalan')->label('Laba Berjalan (Periode Ini)')->money('IDR')->color('success'),
+                                            // BARIS BARU: Menampilkan Valuasi di Pasiva agar transparan
+                                            TextEntry::make('penyesuaian_stok')->label('Penyesuaian Valuasi Persediaan')->money('IDR')->color('warning'),
                                             TextEntry::make('prive')->label('Prive (Tarik Modal Pribadi)')->money('IDR')->color('danger'),
                                             
                                             TextEntry::make('total_pasiva')->label('TOTAL PASIVA')->money('IDR')->weight('black')->color('primary')->size(TextSize::Large),
@@ -510,6 +506,9 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         return [
             'omzet_barang' => (float)$omzetBarang, 'omzet_ongkir' => (float)$omzetOngkir, 'hpp' => (float)$hpp,
             'laba_kotor' => (float)$labaKotor, 'rincian_beban' => $bebanList, 'total_beban' => (float)$totalBeban, 'laba_chem' => (float)$labaBersihPeriodik, 'laba_bersih' => (float)$labaBersihPeriodik,
+            
+            'pendapatan_lain' => (float)$pendapatanLedgerPeriodik,
+            'penyesuaian_stok' => (float)$penyesuaianStok, // <-- INI YANG BARU DITAMBAHKAN
             
             'kas_masuk' => $kasMasukList, 'total_kas_masuk' => (float)$totalKasMasuk,
             'kas_keluar' => $kasKeluarList, 'total_kas_keluar' => (float)$totalKasKeluar,
