@@ -508,27 +508,48 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $debtRatio = $aktiva > 0 ? ($kewajiban / $aktiva) * 100 : 0;
 
         return [
-            'omzet_barang' => (float)$omzetBarang, 'omzet_ongkir' => (float)$omzetOngkir, 'hpp' => (float)$hpp,
-            'laba_kotor' => (float)$labaKotor, 'rincian_beban' => $bebanList, 'total_beban' => (float)$totalBeban, 'laba_chem' => (float)$labaBersihPeriodik, 'laba_bersih' => (float)$labaBersihPeriodik,
-            
-            'pendapatan_lain' => (float)$pendapatanLedgerPeriodik,
-            'penyesuaian_stok' => (float)$penyesuaianStok, // <-- INI YANG BARU DITAMBAHKAN
-            
-            'kas_masuk' => $kasMasukList, 'total_kas_masuk' => (float)$totalKasMasuk,
-            'kas_keluar' => $kasKeluarList, 'total_kas_keluar' => (float)$totalKasKeluar,
-            'net_cashflow' => (float)$netCashflow,
+            'omzet_barang' => (float) $omzetBarang,
+            'omzet_ongkir' => (float) $omzetOngkir,
+            'hpp' => (float) $hpp,
+            'laba_kotor' => (float) $labaKotor,
+            'rincian_beban' => $bebanList,
+            'total_beban' => (float) $totalBeban,
+            'laba_chem' => (float) $labaBersihPeriodik,
+            'laba_bersih' => (float)($labaBersihPeriodik - $penyesuaianStok),
 
-            'piutang_list' => $piutangList, 'total_piutang' => (float)$piutangNeraca,
-            'hutang_list' => $hutangList, 'total_hutang_usaha' => (float)$hutangUsahaNeraca,
+            'pendapatan_lain' => (float) $pendapatanLedgerPeriodik,
+            'penyesuaian_stok' => (float) $penyesuaianStok, // <-- INI YANG BARU DITAMBAHKAN
 
-            'kas' => (float)$kas, 'piutang_neraca' => (float)$piutangNeraca, 'stok' => (float)$stokFisik, 'deposit_sup' => (float)$depositSup, 'total_aktiva' => (float)$aktiva,
-            'hutang_usaha_neraca' => (float)$hutangUsahaNeraca, 'deposit_pel' => (float)$depositPel, 'hutang_komisi' => (float)$hutangKomisi, 'hutang_ongkir' => (float)$hutangOngkir,
-            
-            'modal_awal' => (float)$modalAwal, 'laba_berjalan' => (float)$labaBersihSeumurHidup, 'prive' => (float)$prive, 'penyesuaian_neraca' => (float)$penyesuaianNeraca,
-            'total_pasiva' => (float)($kewajiban + $ekuitasBuku), 'ekuitas' => (float)($aktiva - $kewajiban),
+            'kas_masuk' => $kasMasukList,
+            'total_kas_masuk' => (float) $totalKasMasuk,
+            'kas_keluar' => $kasKeluarList,
+            'total_kas_keluar' => (float) $totalKasKeluar,
+            'net_cashflow' => (float) $netCashflow,
+
+            'piutang_list' => $piutangList,
+            'total_piutang' => (float) $piutangNeraca,
+            'hutang_list' => $hutangList,
+            'total_hutang_usaha' => (float) $hutangUsahaNeraca,
+
+            'kas' => (float) $kas,
+            'piutang_neraca' => (float) $piutangNeraca,
+            'stok' => (float) $stokFisik,
+            'deposit_sup' => (float) $depositSup,
+            'total_aktiva' => (float) $aktiva,
+            'hutang_usaha_neraca' => (float) $hutangUsahaNeraca,
+            'deposit_pel' => (float) $depositPel,
+            'hutang_komisi' => (float) $hutangKomisi,
+            'hutang_ongkir' => (float) $hutangOngkir,
+
+            'modal_awal' => (float) $modalAwal,
+            'laba_berjalan' => (float) $labaBersihSeumurHidup,
+            'prive' => (float) $prive,
+            'penyesuaian_neraca' => (float) $penyesuaianNeraca,
+            'total_pasiva' => (float) ($kewajiban + $ekuitasBuku),
+            'ekuitas' => (float) ($aktiva - $kewajiban),
 
             'profit_margin' => $profitMargin,
-            'status_margin' => $profitMargin >= 10 ? 'Sangat Sehat' : ($profitMargin > 0 ? 'Kurang Ideal' : 'Rugi / Bahaya'),
+            'status_margin' => $profitMargin >= 9 ? 'Sangat Sehat' : ($profitMargin > 0 ? 'Kurang Ideal' : 'Rugi / Bahaya'),
             'current_ratio' => $currentRatio,
             'status_likuiditas' => $currentRatio >= 1.5 ? 'Sangat Aman' : ($currentRatio >= 1 ? 'Aman' : 'Bahaya Gagal Bayar'),
             'debt_ratio' => $debtRatio,
