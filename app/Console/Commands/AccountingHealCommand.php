@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 class AccountingHealCommand extends Command
 {
     protected $signature = 'accounting:heal';
-    protected $description = 'Menyembuhkan otomatis tabel master agar sinkron dengan riwayat ledger (Zero Adjustment)';
+    protected $description = 'Menyembuhkan otomatis tabel master dan menyuntikkan jurnal ghaib akibat kegagalan Stock Opname';
 
     public function handle()
     {
@@ -21,7 +21,9 @@ class AccountingHealCommand extends Command
         $this->info('🛠️ MEMULAI PENYEMBUHAN & SINKRONISASI MASSAL...');
         $this->info('======================================================');
 
-        DB::transaction(function () {
+        $businessId = 1; // Sesuaikan dengan id bisnis utama lu
+
+        DB::transaction(function () use ($businessId) {
 
             // ------------------------------------------------------------------
             // 1. SEMBUHKAN SALDO DOMPET/BANK
@@ -80,15 +82,11 @@ class AccountingHealCommand extends Command
                 $totalRilisKurir = Ledger::where('finance_category_id', $catLiaShipPaid)->sum('amount');
                 $expectedHutangOngkir = $totalBebanKurir - $totalRilisKurir;
 
-                // Hasil Audit Lu: Hutang riil manifest = 0, tapi ledger mencatat -175.000
-                // Artinya ada kelebihan rilis duit kas keluar ke kurir tanpa dasar manifest surat jalan sebesar 175rb
                 if ($expectedHutangOngkir < 0) {
                     $selisihGhaib = abs($expectedHutangOngkir);
                     
-                    // Kita lahirkan Jurnal Penyesuaian Pengakuan Beban Kurir non-tunai (wallet_id null)
-                    // Agar nominal pengakuan beban naik 175rb mengimbangi kas keluar riilnya
                     Ledger::create([
-                        'business_id' => Ledger::where('finance_category_id', $catLiaShipPaid)->first()?->business_id ?? 1,
+                        'business_id' => Ledger::where('finance_category_id', $catLiaShipPaid)->first()?->business_id ?? $businessId,
                         'wallet_id' => null, 
                         'finance_category_id' => $catOpShipping,
                         'transaction_date' => now(),
@@ -97,7 +95,81 @@ class AccountingHealCommand extends Command
                         'amount' => $selisihGhaib,
                     ]);
 
-                    $this->info("   ✅ Berhasil membuat 1 baris Ledger Pengakuan Beban Ongkir baru sebesar Rp " . number_format($selisihGhaib, 0, ',', '.') . " untuk menyerap minus ghaib.");
+                    $this->info("   ✅ Berhasil membuat 1 baris Ledger Pengakuan Beban Ongkir baru sebesar Rp " . number_format($selisihGhaib, 0, ',', '.'));
+                }
+            }
+
+            // ------------------------------------------------------------------
+            // UPDATED - 4. BACKFILL JURNAL SAKRAL STOCK OPNAME (ANTI-PINCANG)
+            // ------------------------------------------------------------------
+            $this->comment("\n" . '4. Memeriksa & Menyembuhkan Jurnal Ghaib Hasil Stock Opname (SO)...');
+            $opnameClass = 'App\Models\StockOpname'; // Sesuaikan namespace model SO lu
+            
+            if (class_exists($opnameClass)) {
+                $catLoss = FinanceCategory::withoutGlobalScopes()->where('code', 'EXP_LOSS')->first();
+                $catGain = FinanceCategory::withoutGlobalScopes()->where('code', 'INC_GAIN')->first();
+
+                if ($catLoss && $catGain) {
+                    $allOpnames = $opnameClass::with('items')->get();
+                    $healedSoCount = 0;
+
+                    foreach ($allOpnames as $opname) {
+                        $seharusnyaKeuntungan = 0;
+                        $seharusnyaKerugian = 0;
+
+                        foreach ($opname->items as $item) {
+                            $val = (float)$item->adjustment_value;
+                            if ($val > 0) $seharusnyaKeuntungan += $val;
+                            if ($val < 0) $seharusnyaKerugian += abs($val);
+                        }
+
+                        // A. Suntik Balik Beban Kerugian Barang Hilang (EXP_LOSS)
+                        if ($seharusnyaKerugian > 0) {
+                            $existLoss = Ledger::where('reference_type', $opnameClass)
+                                ->where('reference_id', $opname->id)
+                                ->where('finance_category_id', $catLoss->id)
+                                ->exists();
+                            
+                            if (!$existLoss) {
+                                Ledger::create([
+                                    'business_id' => $opname->business_id ?? $businessId,
+                                    'wallet_id' => null, // Non-tunai
+                                    'finance_category_id' => $catLoss->id,
+                                    'transaction_date' => $opname->opname_date ?? $opname->created_at ?? now(),
+                                    'description' => "Beban Kerugian Stok (Opname #{$opname->id}) - Auto Healed",
+                                    'type' => 'out',
+                                    'amount' => $seharusnyaKerugian,
+                                    'reference_type' => $opnameClass,
+                                    'reference_id' => $opname->id,
+                                ]);
+                                $healedSoCount++;
+                            }
+                        }
+
+                        // B. Suntik Balik Pendapatan Selisih Lebih Barang (INC_GAIN)
+                        if ($seharusnyaKeuntungan > 0) {
+                            $existGain = Ledger::where('reference_type', $opnameClass)
+                                ->where('reference_id', $opname->id)
+                                ->where('finance_category_id', $catGain->id)
+                                ->exists();
+
+                            if (!$existGain) {
+                                Ledger::create([
+                                    'business_id' => $opname->business_id ?? $businessId,
+                                    'wallet_id' => null, // Non-tunai
+                                    'finance_category_id' => $catGain->id,
+                                    'transaction_date' => $opname->opname_date ?? $opname->created_at ?? now(),
+                                    'description' => "Pendapatan Penyesuaian Stok Ditemukan (Opname #{$opname->id}) - Auto Healed",
+                                    'type' => 'in',
+                                    'amount' => $seharusnyaKeuntungan,
+                                    'reference_type' => $opnameClass,
+                                    'reference_id' => $opname->id,
+                                ]);
+                                $healedSoCount++;
+                            }
+                        }
+                    }
+                    $this->info("   ✅ Sukses melunasi {$healedSoCount} slip jurnal penyesuaian SO ghaib masa lalu!");
                 }
             }
         });
