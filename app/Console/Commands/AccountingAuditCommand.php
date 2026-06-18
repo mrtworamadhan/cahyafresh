@@ -97,7 +97,23 @@ class AccountingAuditCommand extends Command
         
         $kas = Wallet::where('business_id', $businessId)->sum('balance');
         $totalPiutang = Order::where('business_id', $businessId)->where('status', 'completed')->whereIn('payment_status', ['unpaid', 'partial'])->get()->sum('remaining_balance');
-        $stok = Product::where('business_id', $businessId)->sum(DB::raw('stock * base_price'));
+        
+        $totalInvoicePurchase = \App\Models\Purchase::where('business_id', $businessId)->sum('total_amount');
+        
+        // 2. Ambil total HPP barang yang sudah berhasil terjual ke konsumen
+        $hppMurni = \App\Models\OrderItem::whereHas('order', function($q) use ($businessId) { 
+            $q->where('business_id', $businessId)->where('status', 'completed'); 
+        })->sum(DB::raw('base_price * (qty_billed + qty_bonus)'));
+
+        // 3. Ambil akumulasi nilai penyesuaian dari hasil Stock Opname (SO)
+        $catLossId = \App\Models\FinanceCategory::withoutGlobalScopes()->where('code', 'EXP_LOSS')->first()?->id;
+        $catGainId = \App\Models\FinanceCategory::withoutGlobalScopes()->where('code', 'INC_GAIN')->first()?->id;
+        $ledgerGain = \App\Models\Ledger::where('business_id', $businessId)->where('finance_category_id', $catGainId)->where('type', 'in')->sum('amount');
+        $ledgerLoss = \App\Models\Ledger::where('business_id', $businessId)->where('finance_category_id', $catLossId)->where('type', 'out')->sum('amount');
+        $netOpname = $ledgerGain - $ledgerLoss;
+
+        // 4. Rekonstruksi Nilai Aset Gudang berdasarkan Arus Biaya Historis yang Sah
+        $stok = max(0, $totalInvoicePurchase - $hppMurni + $netOpname);
         $totalAktiva = $kas + $totalPiutang + $stok;
 
         $totalHutangUsaha = Purchase::where('business_id', $businessId)->whereIn('status', ['unpaid', 'partial'])->get()->sum('remaining_balance');
