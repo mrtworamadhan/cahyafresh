@@ -328,6 +328,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
 
         $shippingCategory = FinanceCategory::withoutGlobalScopes()->where('code', 'OP_SHIPPING')->first();
         $bebanOngkir = (float)Ledger::where('business_id', $businessId)->where('finance_category_id', $shippingCategory?->id)->whereBetween('transaction_date', [$startDate, $endDate])->sum('amount');
+        
         $hpp = (float)OrderItem::whereHas('order', function($q) use ($businessId, $startDate, $endDate) {
             $q->where('business_id', $businessId)->where('status', 'completed')->whereBetween('updated_at', [$startDate, $endDate]);
         })->sum(DB::raw('base_price * (qty_billed + qty_bonus)'));
@@ -342,7 +343,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         if ($bebanOngkir > 0) { $bebanList[] = ['name' => 'Beban Pengiriman & Ekspedisi (Riil)', 'amount' => (float) $bebanOngkir]; $totalBeban += $bebanOngkir; }
         foreach ($queryBeban as $beban) { $bebanList[] = ['name' => $beban->category_name ?? 'Beban Lainnya', 'amount' => (float) $beban->total]; $totalBeban += $beban->total; }
         
-        // DEKLARASI LABA KOTOR DAN LABA BERSIH
+        // DEKLARASI LABA KOTOR DAN LABA BERSIH (PERIODIK)
         $labaKotor = ($omzetBarang + $omzetOngkir + $pendapatanLedgerPeriodik) - $hpp;
         $labaBersihPeriodik = $labaKotor - $totalBeban;
 
@@ -356,68 +357,54 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $totalKasKeluar = (float)$queryKasKeluar->sum('total');
 
         // --- C. PIUTANG & HUTANG ---
-        $piutangQuery = Order::with('customer')->where('business_id', $businessId)->where('status', 'completed')->whereIn('payment_status', ['unpaid', 'partial'])->get();
+        $piutangQuery = Order::with('customer')->where('business_id', $businessId)->where('status', 'completed')->get();
         $piutangList = $piutangQuery->filter(fn($o) => $o->remaining_balance > 0)->map(fn($o) => [
-            'date' => \Carbon\Carbon::parse($o->delivery_date)->format('d M Y'), 'order_number' => $o->order_number, 'customer' => $o->customer->name ?? 'Umum', 'remaining_balance' => (float)$o->remaining_balance
+            'date' => \Carbon\Carbon::parse($o->delivery_date)->format('d M Y'), 'order_number' => $o->order_number, 'customer' => $o->customer?->name ?? 'Umum', 'remaining_balance' => (float)$o->remaining_balance
         ])->toArray();
-        $totalPiutang = (float)$piutangQuery->sum('remaining_balance');
+        $totalPiutang = (float)$piutangQuery->sum(fn($o) => $o->remaining_balance);
 
-        $hutangQuery = Purchase::with('supplier')->where('business_id', $businessId)->whereIn('status', ['unpaid', 'partial'])->get();
+        $hutangQuery = Purchase::with('supplier')->where('business_id', $businessId)->get();
         $hutangList = $hutangQuery->filter(fn($p) => $p->remaining_balance > 0)->map(fn($p) => [
-            'date' => \Carbon\Carbon::parse($p->purchase_date)->format('d M Y'), 'invoice_number' => $p->invoice_number, 'supplier' => $p->supplier->name ?? 'Umum', 'remaining_balance' => (float)$p->remaining_balance
+            'date' => \Carbon\Carbon::parse($p->purchase_date)->format('d M Y'), 'invoice_number' => $p->invoice_number, 'supplier' => $p->supplier?->name ?? 'Umum', 'remaining_balance' => (float)$p->remaining_balance
         ])->toArray();
-        $totalHutang = (float)$hutangQuery->sum('remaining_balance');
+        $totalHutang = (float)$hutangQuery->sum(fn($p) => $p->remaining_balance);
 
         // --- D. NERACA SAKRAL (GLOBAL) ---
         $kas = (float)Wallet::where('business_id', $businessId)->sum('balance');
-        $piutangNeraca = Order::where('business_id', $businessId)
-            ->where('status', 'completed')
-            ->get()
-            ->sum(fn($order) => $order->remaining_balance); // Menghitung via Accessor Model
-        $stok = (float)Product::where('business_id', $businessId)->sum(DB::raw('GREATEST(stock, 0) * base_price')); // FIX: Stok minus dianggap 0
+        $stok = (float)Product::where('business_id', $businessId)->sum(DB::raw('GREATEST(stock, 0) * base_price'));
         $depositSup = (float)Supplier::where('business_id', $businessId)->sum('deposit_balance');
-        
-        $aktiva = $kas + $piutangNeraca + $stok + $depositSup;
+        $aktiva = (float)($kas + $totalPiutang + $stok + $depositSup);
 
-        $hutangUsahaNeraca = Purchase::where('business_id', $businessId)
-            ->get()
-            ->sum(fn($purchase) => $purchase->remaining_balance);
+        $hutangUsahaNeraca = $totalHutang;
         $depositPel = (float)Customer::where('business_id', $businessId)->sum('deposit_balance');
         $hutangKomisi = (float)Customer::where('business_id', $businessId)->sum('commission_balance');
         $hutangOngkir = (float)Delivery::where('business_id', $businessId)->where('is_paid_to_courier', false)->whereHas('order', fn($q) => $q->where('status', 'completed'))->sum('shipping_cost_actual');
-
-        $kewajiban = $hutangUsahaNeraca + $depositPel + $hutangKomisi + $hutangOngkir;
+        $kewajiban = (float)($hutangUsahaNeraca + $depositPel + $hutangKomisi + $hutangOngkir);
         
         $modalAwal = (float)Ledger::where('business_id', $businessId)->where('finance_category_id', FinanceCategory::where('code', 'EQ_MODAL')->first()?->id)->sum('amount');
         $prive = (float)Ledger::where('business_id', $businessId)->where('finance_category_id', FinanceCategory::where('code', 'EQ_PRIVE')->first()?->id)->sum('amount');
 
-        // LABA BERJALAN = Omzet Terjual - HPP Terjual - Beban Operasional Riil
-        $omzetSeumurHidup = (float)Order::where('business_id', $businessId)->where('status', 'completed')->sum('total_amount');
-        $hppSeumurHidup = (float)OrderItem::whereHas('order', fn($q) => $q->where('business_id', $businessId)->where('status', 'completed'))->sum(DB::raw('base_price * (qty_billed + qty_bonus)'));
+        // LABA BERJALAN SEUMUR HIDUP
+        $omzetAll = (float)Order::where('business_id', $businessId)->where('status', 'completed')->sum('total_amount');
+        $hppAll = (float)OrderItem::whereHas('order', fn($q) => $q->where('business_id', $businessId)->where('status', 'completed'))->sum(DB::raw('base_price * qty_billed'));
+        $bebanAll = (float)Ledger::where('business_id', $businessId)->where('type', 'out')->whereNotIn('finance_category_id', FinanceCategory::whereIn('code', ['EXP_PURCHASE', 'LIA_AP', 'ASSET_DEP_SUPPLIER', 'EQ_MODAL', 'EQ_PRIVE'])->pluck('id'))->sum('amount');
+        $labaBerjalan = (float)($omzetAll - $hppAll - $bebanAll);
         
-        // Beban operasional murni (exclude hutang/aset/modal)
-        $bebanSeumurHidup = (float)Ledger::query()->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
-            ->where('ledgers.business_id', $businessId)->where('ledgers.type', 'out')
-            ->whereNotIn('finance_categories.code', ['EXP_PURCHASE', 'LIA_AP', 'ASSET_DEP_SUPPLIER', 'EQ_MODAL', 'EQ_PRIVE', 'LIA_COMMISSION_PAID', 'LIA_SHIPPING_PAID'])
-            ->sum('ledgers.amount');
-
-        $labaBerjalan = $omzetSeumurHidup - $hppSeumurHidup - $bebanSeumurHidup;
-        
-        $totalPasiva = $kewajiban + $modalAwal + $labaBerjalan - $prive;
-        $penyesuaianNeraca = $aktiva - $totalPasiva;
+        $totalPasiva = (float)($kewajiban + $modalAwal + $labaBerjalan - $prive);
+        $penyesuaianNeraca = (float)($aktiva - $totalPasiva);
 
         return [
-            'omzet_barang' => (float)$omzetBarang, 'omzet_ongkir' => (float)$omzetOngkir, 'hpp' => (float)$hpp,
-            'laba_kotor' => (float)$labaKotor, 'rincian_beban' => $bebanList, 'total_beban' => (float)$totalBeban, 'laba_bersih' => (float)$labaBersihPeriodik,
-            'kas_masuk' => $kasMasukList, 'total_kas_masuk' => (float)$totalKasMasuk,
-            'kas_keluar' => $kasKeluarList, 'total_kas_keluar' => (float)$totalKasKeluar,
+            'omzet_barang' => $omzetBarang, 'omzet_ongkir' => $omzetOngkir, 'hpp' => $hpp, 'laba_kotor' => $labaKotor, 
+            'rincian_beban' => $bebanList, 'total_beban' => $totalBeban, 'laba_bersih' => $labaBersihPeriodik,
+            'kas_masuk' => $kasMasukList, 'total_kas_masuk' => $totalKasMasuk,
+            'kas_keluar' => $kasKeluarList, 'total_kas_keluar' => $totalKasKeluar,
             'net_cashflow' => (float)($totalKasMasuk - $totalKasKeluar),
-            'piutang_list' => $piutangList, 'total_piutang' => (float)$totalPiutang,
-            'hutang_list' => $hutangList, 'total_hutang_usaha' => (float)$totalHutang,
-            'kas' => (float)$kas, 'piutang_neraca' => (float)$totalPiutang, 'stok' => (float)$stok, 'deposit_sup' => (float)$depositSup, 'total_aktiva' => (float)$aktiva,
-            'hutang_usaha_neraca' => (float)$hutangUsahaNeraca, 'deposit_pel' => (float)$depositPel, 'hutang_komisi' => (float)$hutangKomisi, 'hutang_ongkir' => (float)$hutangOngkir,
-            'modal_awal' => (float)$modalAwal, 'laba_berjalan' => (float)$labaBerjalan, 'prive' => (float)$prive, 'penyesuaian_neraca' => (float)$penyesuaianNeraca,
-            'total_pasiva' => (float)$totalPasiva, 'ekuitas' => (float)($aktiva - $kewajiban),
+            'piutang_list' => $piutangList, 'total_piutang' => $totalPiutang,
+            'hutang_list' => $hutangList, 'total_hutang_usaha' => $totalHutang,
+            'kas' => $kas, 'piutang_neraca' => $totalPiutang, 'stok' => $stok, 'deposit_sup' => $depositSup, 'total_aktiva' => $aktiva,
+            'hutang_usaha_neraca' => $totalHutang, 'deposit_pel' => $depositPel, 'hutang_komisi' => $hutangKomisi, 'hutang_ongkir' => $hutangOngkir,
+            'modal_awal' => $modalAwal, 'laba_berjalan' => $labaBerjalan, 'prive' => $prive, 'penyesuaian_neraca' => $penyesuaianNeraca,
+            'total_pasiva' => $totalPasiva, 'ekuitas' => (float)($aktiva - $kewajiban),
             'profit_margin' => ($omzetBarang + $omzetOngkir) > 0 ? ($labaBersihPeriodik / ($omzetBarang + $omzetOngkir)) * 100 : 0,
             'current_ratio' => $kewajiban > 0 ? ($aktiva / $kewajiban) : 0,
             'debt_ratio' => $aktiva > 0 ? ($kewajiban / $aktiva) * 100 : 0
