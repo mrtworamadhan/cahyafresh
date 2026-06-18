@@ -319,7 +319,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $endDate = ($this->data['end_date'] ?? now()->format('Y-m-d')) . ' 23:59:59';
 
         // ==============================================================
-        // --- A. LABA RUGI PERIODIK (FILTERED BY DATE RANGE) ---
+        // --- A. LABA RUGI PERIODIK ---
         // ==============================================================
         $omzetBarang = (float) Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('updated_at', [$startDate, $endDate])->sum(DB::raw('total_amount - shipping_fee_billed'));
         $omzetOngkir = (float) Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('updated_at', [$startDate, $endDate])->sum('shipping_fee_billed');
@@ -399,7 +399,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $netCashflow = $totalKasMasuk - $totalKasKeluar;
 
         // ==============================================================
-        // --- C. PIUTANG & HUTANG LIST (FOR VIEW REPEATER ONLY) ---
+        // --- C. PIUTANG & HUTANG LIST ---
         // ==============================================================
         $piutangQuery = Order::with('customer')->where('business_id', $businessId)->where('status', 'completed')->get();
         $piutangList = [];
@@ -432,30 +432,25 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         }
 
         // ==============================================================
-        // FIXED NERACA SAKRAL (FORMULA KEMBAR 100% SINKRON DENGAN TERMINAL AUDIT)
+        // FIXED NERACA SAKRAL
         // ==============================================================
         $kas = (float) Wallet::where('business_id', $businessId)->sum('balance');
         $depositSup = (float) Supplier::where('business_id', $businessId)->sum('deposit_balance');
         
-        // 1. Deklarasi HPP Murni (Dinaikkan agar bisa dipakai rumus Stok)
+        $totalInvoicePurchase = (float) Purchase::where('business_id', $businessId)->sum('total_amount');
+        
         $hppMurni = (float) OrderItem::whereHas('order', function($q) use ($businessId) { 
             $q->where('business_id', $businessId)->where('status', 'completed'); 
         })->sum(DB::raw('base_price * (qty_billed + qty_bonus)'));
 
-        // 2. Deklarasi Total Pembelian dengan Filter Tenant
-        $totalInvoicePurchase = (float) Purchase::where('business_id', $businessId)->sum('total_amount');
+        $catLossId = FinanceCategory::withoutGlobalScopes()->where('code', 'EXP_LOSS')->first()?->id;
+        $catGainId = FinanceCategory::withoutGlobalScopes()->where('code', 'INC_GAIN')->first()?->id;
+        $ledgerGain = (float) Ledger::where('business_id', $businessId)->where('finance_category_id', $catGainId)->where('type', 'in')->sum('amount');
+        $ledgerLoss = (float) Ledger::where('business_id', $businessId)->where('finance_category_id', $catLossId)->where('type', 'out')->sum('amount');
+        $netOpname = $ledgerGain - $ledgerLoss;
 
-        // 3. Deklarasi Net Opname (Filter Ledger masuk dikurangi keluar untuk Opname)
-        // Pastikan 'INV_OPNAME' sesuai dengan kode kategori di database Anda.
-        $opnameCategoryIds = FinanceCategory::withoutGlobalScopes()->whereIn('code', ['INV_OPNAME', 'ADJ_STOK', 'OPNAME'])->pluck('id');
-        $opnameIn = (float) Ledger::where('business_id', $businessId)->where('type', 'in')->whereIn('finance_category_id', $opnameCategoryIds)->sum('amount');
-        $opnameOut = (float) Ledger::where('business_id', $businessId)->where('type', 'out')->whereIn('finance_category_id', $opnameCategoryIds)->sum('amount');
-        $netOpname = $opnameIn - $opnameOut;
-
-        // 4. Implementasi Rumus Stok Identik dengan Audit
         $stok = max(0, $totalInvoicePurchase - $hppMurni + $netOpname);
         
-        // 5. Kalkulasi Aktiva Akhir
         $aktiva = $kas + $piutangNeraca + $stok + $depositSup;
 
         $depositPel = (float) Customer::where('business_id', $businessId)->sum('deposit_balance');
@@ -470,7 +465,6 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $priveCategory = FinanceCategory::withoutGlobalScopes()->where('code', 'EQ_PRIVE')->first();
         $prive = (float) Ledger::where('business_id', $businessId)->where('finance_category_id', $priveCategory?->id)->sum('amount');
 
-        // REKONSILIASI LABA NERACA SEUMUR HIDUP SECARA PREMEDITATED
         $pendapatanLedgerMurni = (float) Ledger::query()
             ->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
             ->where('ledgers.business_id', $businessId)->where('ledgers.type', 'in')
