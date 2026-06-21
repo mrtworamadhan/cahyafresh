@@ -20,8 +20,6 @@ use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
 use Filament\Forms\Components\Select;
-use Filament\Infolists\Components\RepeatableEntry;
-use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Pages\Concerns\InteractsWithHeaderActions;
 use Filament\Schemas\Components\Grid;
@@ -42,15 +40,19 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Concerns\InteractsWithInfolists;
 use Filament\Infolists\Contracts\HasInfolists;
+use Filament\Infolists\Infolist;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\RepeatableEntry;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
-class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, HasActions
+class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasActions, HasTable
 {
+    // 1. MENGEMBALIKAN TRAITS ASLI MILIK LU
     use InteractsWithForms, InteractsWithInfolists, InteractsWithTable, InteractsWithActions, InteractsWithHeaderActions, HasPageShield;
 
+    // 2. MENGEMBALIKAN PROPERTIES ASLI MILIK LU
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentChartBar;
-
     protected static string|UnitEnum|null $navigationGroup = 'Keuangan';
     protected static ?int $navigationSort = 1;
     protected static ?string $navigationLabel = 'Laporan Keuangan';
@@ -59,7 +61,9 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
     protected string $view = 'filament.pages.laporan-keuangan';
 
     public ?array $data = [];
+    public string $activeTab = 'laba_rugi';
 
+    // 3. MENGEMBALIKAN METHOD MOUNT ASLI MILIK LU
     public function mount(): void
     {
         $this->form->fill([
@@ -67,6 +71,9 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             'start_date' => now()->startOfMonth()->format('Y-m-d'),
             'end_date' => now()->format('Y-m-d'),
         ]);
+        
+        // Memuat data awal
+        $this->updateData();
     }
 
     public function updateData(): void
@@ -74,6 +81,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $this->data = $this->getLiveData();
     }
 
+    // 4. MENGEMBALIKAN METHOD HEADER ACTIONS ASLI MILIK LU (TUTUP BUKU)
     protected function getHeaderActions(): array
     {
         return [
@@ -99,6 +107,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         ];
     }
 
+    // 5. MENGEMBALIKAN METHOD FORM ASLI MILIK LU (MODE LIVE VS ARSIP)
     public function form(Schema $form): Schema
     {
         $businessId = Filament::getTenant()?->id ?? auth()->user()->businesses()->first()?->id;
@@ -110,28 +119,37 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                     ->label('Pilih Mode Laporan')
                     ->options(['live' => 'Periode Berjalan (Live)'] + $arsipOptions)
                     ->live()
-                    ->required(),
+                    ->required()
+                    ->afterStateUpdated(fn () => $this->updateData()), // Trigger update data saat mode diubah
 
                 Grid::make(2)
                     ->schema([
-                        DatePicker::make('start_date')->label('Dari Tanggal')->live()->required(),
-                        DatePicker::make('end_date')->label('Sampai Tanggal')->live()->required(),
+                        DatePicker::make('start_date')->label('Dari Tanggal')->live()->required()->afterStateUpdated(fn () => $this->updateData()),
+                        DatePicker::make('end_date')->label('Sampai Tanggal')->live()->required()->afterStateUpdated(fn () => $this->updateData()),
                     ])
                     ->visible(fn (Get $get) => $get('report_mode') === 'live'), 
             ])
             ->statePath('data');
     }
 
+    // =========================================================================
+    // 6. METHOD PENGHITUNGAN NERACA DAN ANALISA (YANG SUDAH KITA PERBAIKI)
+    // =========================================================================
     protected function getLiveData(): array
     {
+        // CEK MODE: Jika sedang melihat arsip, kembalikan snapshot_data dari database
+        if (isset($this->data['report_mode']) && $this->data['report_mode'] !== 'live') {
+            $closing = MonthlyClosing::find($this->data['report_mode']);
+            if ($closing && isset($closing->snapshot_data)) {
+                return is_string($closing->snapshot_data) ? json_decode($closing->snapshot_data, true) : $closing->snapshot_data;
+            }
+        }
+
         $businessId = Filament::getTenant()?->id ?? auth()->user()->businesses()->first()?->id;
         
         $startDate = ($this->data['start_date'] ?? now()->startOfMonth()->format('Y-m-d')) . ' 00:00:00';
         $endDate = ($this->data['end_date'] ?? now()->format('Y-m-d')) . ' 23:59:59';
 
-        // ==============================================================
-        // --- A. LABA RUGI PERIODIK ---
-        // ==============================================================
         $omzetBarang = (float) Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('updated_at', [$startDate, $endDate])->sum(DB::raw('total_amount - shipping_fee_billed'));
         $omzetOngkir = (float) Order::where('business_id', $businessId)->where('status', 'completed')->whereBetween('updated_at', [$startDate, $endDate])->sum('shipping_fee_billed');
         
@@ -179,9 +197,6 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $labaKotor = ($omzetBarang + $omzetOngkir + $pendapatanLedgerPeriodik) - $hpp;
         $labaBersihPeriodik = $labaKotor - $totalBeban;
 
-        // ==============================================================
-        // --- B. ARUS KAS PERIODIK ---
-        // ==============================================================
         $queryKasMasuk = Ledger::query()
             ->join('finance_categories', 'ledgers.finance_category_id', '=', 'finance_categories.id')
             ->where('ledgers.business_id', $businessId)->where('ledgers.type', 'in')->whereNotNull('ledgers.wallet_id') 
@@ -209,13 +224,9 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         }
         $netCashflow = $totalKasMasuk - $totalKasKeluar;
 
-        // ==============================================================
-        // --- C. PIUTANG & HUTANG LIST ---
-        // ==============================================================
         $piutangQuery = Order::with('customer')->where('business_id', $businessId)->where('status', 'completed')->get();
         $piutangList = [];
         $piutangNeraca = 0; 
-        
         foreach ($piutangQuery as $order) {
             if ($order->remaining_balance > 0) { 
                 $piutangList[] = [
@@ -230,7 +241,6 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $hutangQuery = Purchase::with('supplier')->where('business_id', $businessId)->get();
         $hutangList = [];
         $hutangUsahaNeraca = 0;
-        
         foreach ($hutangQuery as $purchase) {
             if ($purchase->remaining_balance > 0) {
                 $hutangList[] = [
@@ -242,9 +252,6 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             }
         }
 
-        // ==============================================================
-        // --- D. NERACA SAKRAL (VALUASI INVENTORY ADAPTIF) ---
-        // ==============================================================
         $kas = (float) Wallet::where('business_id', $businessId)->sum('balance');
         $depositSup = (float) Supplier::where('business_id', $businessId)->sum('deposit_balance');
         
@@ -300,78 +307,93 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
         $ekuitasBuku = $modalAwal + $labaBersihSeumurHidup - $prive;
         $penyesuaianNeraca = $aktiva - ($kewajiban + $ekuitasBuku);
 
-
-        // ==============================================================
-        // --- E. KONFIGURASI ANALISA USAHA & COMMON-SIZE ---
-        // ==============================================================
         $totalOmzet = $omzetBarang + $omzetOngkir + $pendapatanLedgerPeriodik;
+        $profitMargin = $totalOmzet > 0 ? ($labaBersihPeriodik / $totalOmzet) * 100 : 0;
+        $currentRatio = $kewajiban > 0 ? ($aktiva / $kewajiban) : ($aktiva > 0 ? 999 : 0);
+        $debtRatio = $aktiva > 0 ? ($kewajiban / $aktiva) * 100 : 0;
+
+        // ANALISA KESEHATAN COMMON-SIZE
+        $batasHppMax = 80;         
+        $batasBebanWajar = 15;     
+        $batasBebanMax = 20;       
+        $batasPenyusutanWajar = 2; 
+        $batasPenyusutanMax = 3;   
+        $batasLabaMin = 5;         
         
-        // --- KONFIGURASI BATASAN (Bisa Diubah Sesuai Kebijakan) ---
-        $batasHppMax = 80;         // Maksimal HPP 80% (Artinya margin kotor min 20%)
-        $batasBebanWajar = 15;     // Wajar hingga 15% dari omzet
-        $batasBebanMax = 20;       // Bahaya jika lebih dari 20%
-        $batasPenyusutanWajar = 2; // Batas wajar kebocoran gudang/stok 2%
-        $batasPenyusutanMax = 3;   // Bahaya jika di atas 3%
-        $batasLabaMin = 5;         // Target minimal Laba Bersih 5%
-        
-        // --- KALKULASI PERSENTASE ---
         $pctHpp = $totalOmzet > 0 ? ($hpp / $totalOmzet) * 100 : 0;
         $pctBeban = $totalOmzet > 0 ? ($totalBeban / $totalOmzet) * 100 : 0;
         $pctPenyusutan = $totalOmzet > 0 ? (abs($penyesuaianStok) / $totalOmzet) * 100 : 0;
         $labaBersihPeriodikFinal = $labaBersihPeriodik - $penyesuaianStok;
         $pctLaba = $totalOmzet > 0 ? ($labaBersihPeriodikFinal / $totalOmzet) * 100 : 0;
 
-        // --- PENILAIAN STATUS (KUALITATIF) ---
         $evalHpp = $pctHpp <= $batasHppMax ? 'Efisien' : 'Bahaya (Terlalu Tinggi)';
         $evalBeban = $pctBeban <= $batasBebanWajar ? 'Efisien' : ($pctBeban <= $batasBebanMax ? 'Wajar' : 'Boros / Overbudget');
         $evalPenyusutan = $pctPenyusutan <= $batasPenyusutanWajar ? 'Aman / Terkendali' : ($pctPenyusutan <= $batasPenyusutanMax ? 'Wajar / Toleransi' : 'Bahaya (Kebocoran Tinggi)');
         $evalLaba = $pctLaba >= $batasLabaMin ? 'Sehat' : ($pctLaba > 0 ? 'Kurang Ideal' : 'Rugi / Bahaya');
 
-        $currentRatio = $kewajiban > 0 ? ($aktiva / $kewajiban) : ($aktiva > 0 ? 999 : 0);
-        $debtRatio = $aktiva > 0 ? ($kewajiban / $aktiva) * 100 : 0;
-
         return [
-            // Laba Rugi Data
-            'omzet_barang' => (float)$omzetBarang, 'omzet_ongkir' => (float)$omzetOngkir, 'hpp' => (float)$hpp,
-            'laba_kotor' => (float)$labaKotor, 'rincian_beban' => $bebanList, 'total_beban' => (float)$totalBeban, 'laba_chem' => (float)$labaBersihPeriodik, 
+            'omzet_barang' => (float)$omzetBarang, 
+            'omzet_ongkir' => (float)$omzetOngkir, 
+            'hpp' => (float)$hpp,
+            'laba_kotor' => (float)$labaKotor, 
+            'rincian_beban' => $bebanList, 
+            'total_beban' => (float)$totalBeban, 
+            'laba_chem' => (float)$labaBersihPeriodik, 
             'laba_bersih' => (float)$labaBersihPeriodikFinal,
             'pendapatan_lain' => (float)$pendapatanLedgerPeriodik,
-            'penyesuaian_stok' => (float)$penyesuaianStok,
             
-            // Common-Size Evaluasi (Dikirim ke View)
+            'kas_masuk' => $kasMasukList, 
+            'total_kas_masuk' => (float)$totalKasMasuk,
+            'kas_keluar' => $kasKeluarList, 
+            'total_kas_keluar' => (float)$totalKasKeluar,
+            'net_cashflow' => (float)$netCashflow,
+
+            'piutang_list' => $piutangList, 
+            'total_piutang' => (float)$piutangNeraca,
+            'hutang_list' => $hutangList, 
+            'total_hutang_usaha' => (float)$hutangUsahaNeraca,
+
+            'kas' => (float)$kas, 
+            'piutang_neraca' => (float)$piutangNeraca, 
+            'stok' => (float)$stokFisik, 
+            'deposit_sup' => (float)$depositSup, 
+            'total_aktiva' => (float)$aktiva,
+            'hutang_usaha_neraca' => (float)$hutangUsahaNeraca, 
+            'deposit_pel' => (float)$depositPel, 
+            'hutang_komisi' => (float)$hutangKomisi, 
+            'hutang_ongkir' => (float)$hutangOngkir,
+            
+            'modal_awal' => (float)$modalAwal, 
+            'laba_berjalan' => (float)$labaBersihSeumurHidup, 
+            'prive' => (float)$prive, 
+            'penyesuaian_neraca' => (float)$penyesuaianNeraca,
+            'total_pasiva' => (float)($kewajiban + $ekuitasBuku), 
+            'ekuitas' => (float)($aktiva - $kewajiban),
+
+            'profit_margin' => $profitMargin,
+            'status_margin' => $profitMargin >= 9 ? 'Sangat Sehat' : ($profitMargin > 0 ? 'Kurang Ideal' : 'Rugi / Bahaya'),
+            'current_ratio' => $currentRatio,
+            'status_likuiditas' => $currentRatio >= 1.5 ? 'Sangat Aman' : ($currentRatio >= 1 ? 'Aman' : 'Bahaya Gagal Bayar'),
+            'debt_ratio' => $debtRatio,
+            'status_hutang' => $debtRatio <= 40 ? 'Rendah Risiko' : ($debtRatio <= 60 ? 'Risiko Sedang' : 'Risiko Sangat Tinggi'),
+
+            'penyesuaian_stok' => (float)$penyesuaianStok,
             'hpp_desc' => number_format($pctHpp, 1, ',', '.') . '% dari Omzet (' . $evalHpp . ')',
             'beban_desc' => number_format($pctBeban, 1, ',', '.') . '% dari Omzet (' . $evalBeban . ')',
             'penyusutan_desc' => number_format($pctPenyusutan, 1, ',', '.') . '% dari Omzet (' . $evalPenyusutan . ')',
             'laba_desc' => number_format($pctLaba, 1, ',', '.') . '% Net Profit Margin (' . $evalLaba . ')',
             'eval_hpp' => $evalHpp, 'eval_beban' => $evalBeban, 'eval_penyusutan' => $evalPenyusutan, 'eval_laba' => $evalLaba,
-            'pct_hpp' => number_format($pctHpp, 1, ',', '.') . '%', 'pct_beban' => number_format($pctBeban, 1, ',', '.') . '%', 'pct_penyusutan' => number_format($pctPenyusutan, 1, ',', '.') . '%', 'pct_laba' => number_format($pctLaba, 1, ',', '.') . '%',
-            
-            // Arus Kas Data
-            'kas_masuk' => $kasMasukList, 'total_kas_masuk' => (float)$totalKasMasuk,
-            'kas_keluar' => $kasKeluarList, 'total_kas_keluar' => (float)$totalKasKeluar,
-            'net_cashflow' => (float)$netCashflow,
-
-            // Piutang Hutang Data
-            'piutang_list' => $piutangList, 'total_piutang' => (float)$piutangNeraca,
-            'hutang_list' => $hutangList, 'total_hutang_usaha' => (float)$hutangUsahaNeraca,
-
-            // Neraca Data
-            'kas' => (float)$kas, 'piutang_neraca' => (float)$piutangNeraca, 'stok' => (float)$stokFisik, 'deposit_sup' => (float)$depositSup, 'total_aktiva' => (float)$aktiva,
-            'hutang_usaha_neraca' => (float)$hutangUsahaNeraca, 'deposit_pel' => (float)$depositPel, 'hutang_komisi' => (float)$hutangKomisi, 'hutang_ongkir' => (float)$hutangOngkir,
-            'modal_awal' => (float)$modalAwal, 'laba_berjalan' => (float)$labaBersihSeumurHidup, 'prive' => (float)$prive, 'penyesuaian_neraca' => (float)$penyesuaianNeraca,
-            'total_pasiva' => (float)($kewajiban + $ekuitasBuku), 'ekuitas' => (float)($aktiva - $kewajiban),
-
-            // Analisa Finansial Lanjutan
-            'current_ratio' => $currentRatio,
-            'status_likuiditas' => $currentRatio >= 1.5 ? 'Sangat Aman' : ($currentRatio >= 1 ? 'Aman' : 'Bahaya Gagal Bayar'),
-            'debt_ratio' => $debtRatio,
-            'status_hutang' => $debtRatio <= 40 ? 'Rendah Risiko' : ($debtRatio <= 60 ? 'Risiko Sedang' : 'Risiko Sangat Tinggi'),
+            'pct_hpp' => number_format($pctHpp, 1, ',', '.') . '%', 
+            'pct_beban' => number_format($pctBeban, 1, ',', '.') . '%', 
+            'pct_penyusutan' => number_format($pctPenyusutan, 1, ',', '.') . '%', 
+            'pct_laba' => number_format($pctLaba, 1, ',', '.') . '%',
         ];
     }
 
-    
-
-    public function infolist(Schema $infolist): Schema
+    // =========================================================================
+    // 7. INFOLIST UI (YANG SUDAH MENGGUNAKAN HELPER TEXT)
+    // =========================================================================
+    public function infolist(Infolist $infolist): Infolist
     {
         return $infolist
             ->state($this->data)
@@ -389,7 +411,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                             ->label('Harga Pokok Penjualan (HPP)')
                                             ->money('IDR')
                                             ->color('danger')
-                                            ->helperText(fn () => $this->data['hpp_desc'] ?? ''), // Menambahkan persentase Common-Size
+                                            ->helperText(fn () => $this->data['hpp_desc'] ?? ''), 
                                         TextEntry::make('laba_kotor')->label('Laba Kotor (Gross Profit)')->money('IDR')->weight('black')->size(TextSize::Large),
                                     ])->columns(2),
 
@@ -524,8 +546,18 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                         Tab::make('Analisa Usaha (Executive Summary)')
                             ->icon('heroicon-o-presentation-chart-line')
                             ->schema([
-                                Section::make('Kesehatan Profitabilitas (Common-Size Analysis)')
-                                    ->description('Penilaian otomatis kualitas pengeluaran dibandingkan dengan batas ideal industri.')
+                                Section::make('Kesehatan Finansial & Margin (Original)')
+                                    ->schema([
+                                        TextEntry::make('profit_margin')->label('Profit Margin')->numeric(2)->suffix('%')->color('primary'),
+                                        TextEntry::make('status_margin')->label('Status Margin')->badge()->color(fn ($state) => $state === 'Sangat Sehat' ? 'success' : ($state === 'Kurang Ideal' ? 'warning' : 'danger')),
+                                        TextEntry::make('current_ratio')->label('Rasio Lancar (Current Ratio)')->numeric(2)->suffix(' x')->color('primary'),
+                                        TextEntry::make('status_likuiditas')->label('Status Likuiditas')->badge()->color(fn ($state) => $state === 'Sangat Aman' || $state === 'Aman' ? 'success' : 'danger'),
+                                        TextEntry::make('debt_ratio')->label('Rasio Hutang (Debt to Asset)')->numeric(2)->suffix('%')->color('danger'),
+                                        TextEntry::make('status_hutang')->label('Status Hutang')->badge()->color(fn ($state) => $state === 'Rendah Risiko' ? 'success' : ($state === 'Risiko Sedang' ? 'warning' : 'danger')),
+                                    ])->columns(2),
+
+                                Section::make('Kesehatan Profitabilitas Lanjutan (Common-Size Analysis)')
+                                    ->description('Penilaian kualitas pengeluaran dibandingkan dengan batas ideal industri.')
                                     ->schema([
                                         TextEntry::make('pct_hpp')
                                             ->label('Rasio Harga Pokok (HPP)')
@@ -540,26 +572,17 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                             ->helperText(fn() => 'Status: ' . ($this->data['eval_beban'] ?? '')),
                                             
                                         TextEntry::make('pct_penyusutan')
-                                            ->label('Tingkat Kebocoran / Susut Gudang')
+                                            ->label('Tingkat Kebocoran / Susut')
                                             ->badge()
                                             ->color(fn() => str_contains($this->data['eval_penyusutan'] ?? '', 'Aman') ? 'success' : (str_contains($this->data['eval_penyusutan'] ?? '', 'Wajar') ? 'warning' : 'danger'))
                                             ->helperText(fn() => 'Status: ' . ($this->data['eval_penyusutan'] ?? '')),
                                             
                                         TextEntry::make('pct_laba')
-                                            ->label('Net Profit Margin (Laba Bersih Akhir)')
+                                            ->label('Net Profit Margin Akhir')
                                             ->badge()
                                             ->color(fn() => str_contains($this->data['eval_laba'] ?? '', 'Sehat') ? 'success' : (str_contains($this->data['eval_laba'] ?? '', 'Ideal') ? 'warning' : 'danger'))
                                             ->helperText(fn() => 'Status: ' . ($this->data['eval_laba'] ?? '')),
                                     ])->columns(4),
-
-                                Section::make('Kesehatan Finansial (Likuiditas & Solvabilitas)')
-                                    ->description('Kemampuan bisnis dalam melunasi hutang dan kewajiban.')
-                                    ->schema([
-                                        TextEntry::make('current_ratio')->label('Rasio Lancar (Current Ratio)')->numeric(2)->suffix(' x')->color('primary'),
-                                        TextEntry::make('status_likuiditas')->label('Status Likuiditas')->badge()->color(fn ($state) => $state === 'Sangat Aman' || $state === 'Aman' ? 'success' : 'danger'),
-                                        TextEntry::make('debt_ratio')->label('Rasio Hutang (Debt to Asset)')->numeric(2)->suffix('%')->color('danger'),
-                                        TextEntry::make('status_hutang')->label('Status Hutang')->badge()->color(fn ($state) => $state === 'Rendah Risiko' ? 'success' : ($state === 'Risiko Sedang' ? 'warning' : 'danger')),
-                                    ])->columns(2),
                             ]),
                     ])->columnSpanFull()
             ]);
