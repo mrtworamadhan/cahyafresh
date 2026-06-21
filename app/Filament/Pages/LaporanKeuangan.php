@@ -393,7 +393,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasActions
     // =========================================================================
     // 7. INFOLIST UI (YANG SUDAH MENGGUNAKAN HELPER TEXT)
     // =========================================================================
-    public function infolist(Infolist $infolist): Infolist
+    public function infolist(Schema $infolist): Schema
     {
         return $infolist
             ->state($this->data)
