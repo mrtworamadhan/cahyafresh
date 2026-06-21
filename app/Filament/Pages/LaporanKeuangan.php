@@ -525,7 +525,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                             ->icon('heroicon-o-presentation-chart-line')
                             ->schema([
                                 Section::make('Kesehatan Profitabilitas (Common-Size Analysis)')
-                                    ->helperText('Penilaian otomatis kualitas pengeluaran dibandingkan dengan batas ideal industri.')
+                                    ->description('Penilaian otomatis kualitas pengeluaran dibandingkan dengan batas ideal industri.')
                                     ->schema([
                                         TextEntry::make('pct_hpp')
                                             ->label('Rasio Harga Pokok (HPP)')
@@ -553,7 +553,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                     ])->columns(4),
 
                                 Section::make('Kesehatan Finansial (Likuiditas & Solvabilitas)')
-                                    ->helperText('Kemampuan bisnis dalam melunasi hutang dan kewajiban.')
+                                    ->description('Kemampuan bisnis dalam melunasi hutang dan kewajiban.')
                                     ->schema([
                                         TextEntry::make('current_ratio')->label('Rasio Lancar (Current Ratio)')->numeric(2)->suffix(' x')->color('primary'),
                                         TextEntry::make('status_likuiditas')->label('Status Likuiditas')->badge()->color(fn ($state) => $state === 'Sangat Aman' || $state === 'Aman' ? 'success' : 'danger'),
