@@ -20,6 +20,8 @@ use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
 use Filament\Forms\Components\Select;
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Pages\Concerns\InteractsWithHeaderActions;
 use Filament\Schemas\Components\Grid;
@@ -40,9 +42,6 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Concerns\InteractsWithInfolists;
 use Filament\Infolists\Contracts\HasInfolists;
-use Filament\Infolists\Infolist;
-use Filament\Infolists\Components\TextEntry;
-use Filament\Infolists\Components\RepeatableEntry;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
@@ -390,7 +389,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                             ->label('Harga Pokok Penjualan (HPP)')
                                             ->money('IDR')
                                             ->color('danger')
-                                            ->description(fn () => $this->data['hpp_desc'] ?? ''), // Menambahkan persentase Common-Size
+                                            ->helperText(fn () => $this->data['hpp_desc'] ?? ''), // Menambahkan persentase Common-Size
                                         TextEntry::make('laba_kotor')->label('Laba Kotor (Gross Profit)')->money('IDR')->weight('black')->size(TextSize::Large),
                                     ])->columns(2),
 
@@ -410,13 +409,13 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                             ->label('Total Beban Operasional')
                                             ->money('IDR')
                                             ->color('danger')
-                                            ->description(fn () => $this->data['beban_desc'] ?? ''),
+                                            ->helperText(fn () => $this->data['beban_desc'] ?? ''),
                                             
                                         TextEntry::make('penyesuaian_stok')
                                             ->label('Penyesuaian Valuasi Persediaan')
                                             ->money('IDR')
                                             ->color('warning')
-                                            ->description(fn () => $this->data['penyusutan_desc'] ?? ''),
+                                            ->helperText(fn () => $this->data['penyusutan_desc'] ?? ''),
                                             
                                         TextEntry::make('laba_bersih')
                                             ->label('LABA BERSIH (NET PROFIT)')
@@ -424,7 +423,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                                             ->weight('black')
                                             ->size(TextSize::Large)
                                             ->color(fn ($state) => $state >= 0 ? 'success' : 'danger')
-                                            ->description(fn () => $this->data['laba_desc'] ?? ''),
+                                            ->helperText(fn () => $this->data['laba_desc'] ?? ''),
                                     ])->columns(2),
                             ]),
 
@@ -526,35 +525,35 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
                             ->icon('heroicon-o-presentation-chart-line')
                             ->schema([
                                 Section::make('Kesehatan Profitabilitas (Common-Size Analysis)')
-                                    ->description('Penilaian otomatis kualitas pengeluaran dibandingkan dengan batas ideal industri.')
+                                    ->helperText('Penilaian otomatis kualitas pengeluaran dibandingkan dengan batas ideal industri.')
                                     ->schema([
                                         TextEntry::make('pct_hpp')
                                             ->label('Rasio Harga Pokok (HPP)')
                                             ->badge()
                                             ->color(fn() => str_contains($this->data['eval_hpp'] ?? '', 'Efisien') ? 'success' : 'danger')
-                                            ->description(fn() => 'Status: ' . ($this->data['eval_hpp'] ?? '')),
+                                            ->helperText(fn() => 'Status: ' . ($this->data['eval_hpp'] ?? '')),
                                             
                                         TextEntry::make('pct_beban')
                                             ->label('Rasio Beban Operasional')
                                             ->badge()
                                             ->color(fn() => str_contains($this->data['eval_beban'] ?? '', 'Efisien') ? 'success' : (str_contains($this->data['eval_beban'] ?? '', 'Wajar') ? 'warning' : 'danger'))
-                                            ->description(fn() => 'Status: ' . ($this->data['eval_beban'] ?? '')),
+                                            ->helperText(fn() => 'Status: ' . ($this->data['eval_beban'] ?? '')),
                                             
                                         TextEntry::make('pct_penyusutan')
                                             ->label('Tingkat Kebocoran / Susut Gudang')
                                             ->badge()
                                             ->color(fn() => str_contains($this->data['eval_penyusutan'] ?? '', 'Aman') ? 'success' : (str_contains($this->data['eval_penyusutan'] ?? '', 'Wajar') ? 'warning' : 'danger'))
-                                            ->description(fn() => 'Status: ' . ($this->data['eval_penyusutan'] ?? '')),
+                                            ->helperText(fn() => 'Status: ' . ($this->data['eval_penyusutan'] ?? '')),
                                             
                                         TextEntry::make('pct_laba')
                                             ->label('Net Profit Margin (Laba Bersih Akhir)')
                                             ->badge()
                                             ->color(fn() => str_contains($this->data['eval_laba'] ?? '', 'Sehat') ? 'success' : (str_contains($this->data['eval_laba'] ?? '', 'Ideal') ? 'warning' : 'danger'))
-                                            ->description(fn() => 'Status: ' . ($this->data['eval_laba'] ?? '')),
+                                            ->helperText(fn() => 'Status: ' . ($this->data['eval_laba'] ?? '')),
                                     ])->columns(4),
 
                                 Section::make('Kesehatan Finansial (Likuiditas & Solvabilitas)')
-                                    ->description('Kemampuan bisnis dalam melunasi hutang dan kewajiban.')
+                                    ->helperText('Kemampuan bisnis dalam melunasi hutang dan kewajiban.')
                                     ->schema([
                                         TextEntry::make('current_ratio')->label('Rasio Lancar (Current Ratio)')->numeric(2)->suffix(' x')->color('primary'),
                                         TextEntry::make('status_likuiditas')->label('Status Likuiditas')->badge()->color(fn ($state) => $state === 'Sangat Aman' || $state === 'Aman' ? 'success' : 'danger'),
