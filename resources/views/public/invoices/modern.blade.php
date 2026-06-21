@@ -87,7 +87,7 @@
             </td>
             <td width="50%" valign="top" class="text-right">
                 <span style="color: #777; font-size: 12px; font-weight: bold;">TANGGAL NOTA:</span><br>
-                <strong>{{ \Carbon\Carbon::parse($order->order_date)->translatedFormat('d F Y') }}</strong><br><br>
+                <strong>{{ \Carbon\Carbon::parse($order->delivery_date)->translatedFormat('d F Y') }}</strong><br><br>
                 @if($order->payment_status == 'paid')
                     <div style="color: green; border: 2px solid green; display: inline-block; padding: 5px 10px; border-radius: 5px; font-weight: bold; text-transform: uppercase;">LUNAS</div>
                 @else

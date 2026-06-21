@@ -214,7 +214,7 @@
                         <div>                         
                             <span class="inline-block px-2 py-1 bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400 text-[10px] font-black uppercase rounded mb-1">LUNAS</span>                         
                             <h3 class="font-bold text-sm text-zinc-700 dark:text-zinc-300">{{ $order->order_number }}</h3>                         
-                            <p class="text-xs text-zinc-500">Besaran Nota: {{ \Carbon\Carbon::parse($order->order_date)->format('d M Y') }}</p>                     
+                            <p class="text-xs text-zinc-500">Besaran Nota: {{ \Carbon\Carbon::parse($order->delivery_date)->format('d M Y') }}</p>                     
                         </div>                     
                         <div class="text-right flex flex-col items-end gap-1">                         
                             <span class="text-sm font-bold text-zinc-600 dark:text-zinc-400">Rp {{ number_format($order->total_amount, 0, ',', '.') }}</span>                         

@@ -23,7 +23,7 @@ class SupplierStatsWidget extends BaseWidget
         $totalPurchase = $supplier->purchases()->sum('total_amount');
         $totalPaid = $supplier->ledgers()
             ->where('reference_type', Purchase::class)
-            ->where('type', 'in')
+            ->where('type', 'out')
             ->sum('amount');
             
         $hutang = $totalPurchase - $totalPaid;

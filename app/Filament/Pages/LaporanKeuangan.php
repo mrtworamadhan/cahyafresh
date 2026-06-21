@@ -518,7 +518,7 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, 
             'laba_bersih' => (float)($labaBersihPeriodik - $penyesuaianStok),
 
             'pendapatan_lain' => (float) $pendapatanLedgerPeriodik,
-            'penyesuaian_stok' => (float) $penyesuaianStok, // <-- INI YANG BARU DITAMBAHKAN
+            'penyesuaian_stok' => (float) $penyesuaianStok, 
 
             'kas_masuk' => $kasMasukList,
             'total_kas_masuk' => (float) $totalKasMasuk,
