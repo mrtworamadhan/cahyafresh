@@ -46,26 +46,28 @@ use Filament\Infolists\Components\RepeatableEntry;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
-class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasActions
+class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasTable, HasActions
 {
-    use InteractsWithForms;
-    use InteractsWithInfolists;
-    use InteractsWithActions;
-    use InteractsWithHeaderActions;
+    use InteractsWithForms, InteractsWithInfolists, InteractsWithTable, InteractsWithActions, InteractsWithHeaderActions, HasPageShield;
 
-    protected static ?string $navigationIcon = 'heroicon-o-document-chart-bar';
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentChartBar;
+
+    protected static string|UnitEnum|null $navigationGroup = 'Keuangan';
+    protected static ?int $navigationSort = 1;
     protected static ?string $navigationLabel = 'Laporan Keuangan';
-    protected static ?string $title = 'Laporan Keuangan & Laba Rugi';
-    protected static ?string $navigationGroup = 'Keuangan';
-    protected static ?int $navigationSort = 3;
+    protected static ?string $title = 'Laporan Keuangan Executive';
 
-    protected static string $view = 'filament.pages.laporan-keuangan';
+    protected string $view = 'filament.pages.laporan-keuangan';
 
-    public array $data = [];
+    public ?array $data = [];
 
     public function mount(): void
     {
-        $this->updateData();
+        $this->form->fill([
+            'report_mode' => 'live', 
+            'start_date' => now()->startOfMonth()->format('Y-m-d'),
+            'end_date' => now()->format('Y-m-d'),
+        ]);
     }
 
     public function updateData(): void
@@ -76,19 +78,49 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasActions
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('filter')
-                ->label('Filter Periode')
-                ->icon('heroicon-o-funnel')
-                ->form([
-                    DatePicker::make('start_date')->label('Tanggal Mulai')->default(now()->startOfMonth()),
-                    DatePicker::make('end_date')->label('Tanggal Akhir')->default(now()),
-                ])
-                ->action(function (array $data) {
-                    $this->data['start_date'] = $data['start_date'];
-                    $this->data['end_date'] = $data['end_date'];
-                    $this->updateData();
+            Action::make('tutup_buku')
+                ->label('Tutup Buku (Akhir Bulan)')
+                ->icon('heroicon-o-lock-closed')
+                ->color('danger')
+                ->requiresConfirmation()
+                ->action(function () {
+                    $businessId = Filament::getTenant()?->id ?? auth()->user()->businesses()->first()?->id;
+                    $liveData = $this->getLiveData(); 
+
+                    MonthlyClosing::create([
+                        'business_id' => $businessId,
+                        'period_name' => now()->translatedFormat('F Y'), 
+                        'closing_date' => now(),
+                        'snapshot_data' => $liveData, 
+                    ]);
+
+                    Notification::make()->title('Tutup Buku Berhasil!')->success()->send();
+                    $this->form->fill(['report_mode' => 'live']); 
                 }),
         ];
+    }
+
+    public function form(Schema $form): Schema
+    {
+        $businessId = Filament::getTenant()?->id ?? auth()->user()->businesses()->first()?->id;
+        $arsipOptions = MonthlyClosing::where('business_id', $businessId)->orderBy('created_at', 'desc')->pluck('period_name', 'id')->toArray();
+
+        return $form
+            ->schema([
+                Select::make('report_mode')
+                    ->label('Pilih Mode Laporan')
+                    ->options(['live' => 'Periode Berjalan (Live)'] + $arsipOptions)
+                    ->live()
+                    ->required(),
+
+                Grid::make(2)
+                    ->schema([
+                        DatePicker::make('start_date')->label('Dari Tanggal')->live()->required(),
+                        DatePicker::make('end_date')->label('Sampai Tanggal')->live()->required(),
+                    ])
+                    ->visible(fn (Get $get) => $get('report_mode') === 'live'), 
+            ])
+            ->statePath('data');
     }
 
     protected function getLiveData(): array
@@ -338,7 +370,9 @@ class LaporanKeuangan extends Page implements HasForms, HasInfolists, HasActions
         ];
     }
 
-    public function infolist(Infolist $infolist): Infolist
+    
+
+    public function infolist(Schema $infolist): Schema
     {
         return $infolist
             ->state($this->data)
