@@ -151,23 +151,33 @@
             <td class="text-right">-{{ number_format($order->discount_amount, 0, ',', '.') }}</td>
         </tr>
         @endif
+        
         @if($order->shipping_fee_billed > 0)
         <tr>
             <td>ONGKIR:</td>
             <td class="text-right">{{ number_format($order->shipping_fee_billed, 0, ',', '.') }}</td>
         </tr>
         @endif
+        
         <tr class="bold">
             <td>TOTAL TAGIHAN:</td>
             <td class="text-right">Rp {{ number_format($order->total_amount, 0, ',', '.') }}</td>
         </tr>
+        
+        <tr>
+            <td>TELAH DIBAYAR:</td>
+            <td class="text-right">Rp {{ number_format($order->total_amount - $order->remaining_balance, 0, ',', '.') }}</td>
+        </tr>
+        
+        <tr class="bold" style="border-top: 1px solid #000;">
+            <td style="padding-top: 5px;">SISA TAGIHAN:</td>
+            <td class="text-right" style="padding-top: 5px;">Rp {{ number_format($order->remaining_balance, 0, ',', '.') }}</td>
+        </tr>
     </table>
     <div style="clear: both;"></div>
 
-    <!-- Area Pembayaran dan Tanda Tangan -->
     <table style="width: 100%; margin-top: 10px;">
         <tr>
-            <!-- Kolom Kiri: Rekening & Catatan -->
             <td width="55%" style="vertical-align: top; font-size: 9pt;">
                 @if(isset($accounts) && count($accounts) > 0)
                     <strong>INFO PEMBAYARAN:</strong><br>
