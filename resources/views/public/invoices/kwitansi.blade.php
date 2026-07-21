@@ -288,10 +288,22 @@
                 </td>
             </tr>
             <tr>
-                <td class="label-col">Untuk Pembayaran</td>
-                <td class="colon-col">:</td>
-                <td class="value-col">
+                <td class="label-col" valign="top" style="padding-top: 5px;">Untuk Pembayaran</td>
+                <td class="colon-col" valign="top" style="padding-top: 5px;">:</td>
+                <td class="value-col" style="padding-top: 5px;">
                     <strong>Pelunasan Invoice Tagihan #{{ $order->order_number }}</strong>
+                    
+                    <div style="font-size: 13px; margin-top: 6px; color: #333;">
+                        Rincian Barang:
+                        <ul style="margin: 4px 0 0 16px; padding: 0;">
+                            @foreach($order->orderItems as $item)
+                                <li>
+                                    {{ $item->product->name ?? 'Produk Tidak Ditemukan' }} 
+                                    (Qty: {{ $item->qty_billed + $item->qty_bonus }})
+                                </li>
+                            @endforeach
+                        </ul>
+                    </div>
                 </td>
             </tr>
         </table>

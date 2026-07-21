@@ -413,7 +413,8 @@
                 @forelse($commissionHistory as $history)
                     <div class="p-3 bg-zinc-50 dark:bg-zinc-900/50 rounded-xl border border-zinc-100 dark:border-zinc-700/50 flex justify-between items-center gap-2">
                         <div class="flex items-start gap-2.5">
-                            @if($history['type'] == 'in')
+                            <!-- PERBAIKAN: Menggunakan data_get untuk 'type' -->
+                            @if(data_get($history, 'type') == 'in')
                                 <div class="p-2 bg-green-50 dark:bg-green-950/50 text-green-600 dark:text-green-400 rounded-lg shrink-0 mt-0.5">
                                     <x-heroicon-o-arrow-down-left class="w-4 h-4" />
                                 </div>
@@ -424,20 +425,28 @@
                             @endif
 
                             <div>
-                                <p class="text-xs font-bold text-zinc-700 dark:text-zinc-300 leading-tight">{{ $history['title'] }}</p>
-                                <p class="text-[10px] text-zinc-400 mt-0.5">{{ \Carbon\Carbon::parse($history['date'])->format('d M Y, H:i') }}</p>
-                                @if($history['note'])
-                                    <p class="text-[10px] text-zinc-500 dark:text-zinc-400 italic mt-1 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded inline-block">{{ $history['note'] }}</p>
+                                <!-- PERBAIKAN: Menggunakan data_get untuk 'title' -->
+                                <p class="text-xs font-bold text-zinc-700 dark:text-zinc-300 leading-tight">{{ data_get($history, 'title') }}</p>
+                                
+                                <!-- PERBAIKAN: Pengecekan aman untuk 'date' -->
+                                <p class="text-[10px] text-zinc-400 mt-0.5">
+                                    {{ data_get($history, 'date') ? \Carbon\Carbon::parse(data_get($history, 'date'))->format('d M Y, H:i') : '-' }}
+                                </p>
+                                
+                                <!-- PERBAIKAN: Pengecekan aman untuk 'note' -->
+                                @if(data_get($history, 'note'))
+                                    <p class="text-[10px] text-zinc-500 dark:text-zinc-400 italic mt-1 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded inline-block">{{ data_get($history, 'note') }}</p>
                                 @endif
                             </div>
                         </div>
                         
                         <div class="text-right shrink-0">
-                            @if($history['type'] == 'in')
-                                <span class="text-sm font-black text-green-600 dark:text-green-400">+Rp {{ number_format($history['amount'], 0, ',', '.') }}</span>
+                            <!-- PERBAIKAN: Menggunakan data_get untuk 'amount' dengan default 0 -->
+                            @if(data_get($history, 'type') == 'in')
+                                <span class="text-sm font-black text-green-600 dark:text-green-400">+Rp {{ number_format((float) data_get($history, 'amount', 0), 0, ',', '.') }}</span>
                                 <p class="text-[9px] font-bold uppercase tracking-wider text-zinc-400 mt-0.5">Terbuku</p>
                             @else
-                                <span class="text-sm font-black text-rose-600 dark:text-rose-400">-Rp {{ number_format($history['amount'], 0, ',', '.') }}</span>
+                                <span class="text-sm font-black text-rose-600 dark:text-rose-400">-Rp {{ number_format((float) data_get($history, 'amount', 0), 0, ',', '.') }}</span>
                                 <p class="text-[9px] font-bold uppercase tracking-wider text-blue-500 mt-0.5">Rilis/Cair</p>
                             @endif
                         </div>
