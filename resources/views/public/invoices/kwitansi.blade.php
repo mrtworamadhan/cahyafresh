@@ -319,11 +319,9 @@
                     <p style="margin: 0 0 5px 0;">{{ \Carbon\Carbon::parse($order->updated_at)->translatedFormat('d F Y') }}</p>
                     <p style="color: #777; font-size: 12px; margin: 0;">Penerima,</p>
                     
-                    @if($order->business->signature)
-                        <img src="{{ asset('storage/' . $order->business->signature) }}" style="height: 50px; margin: 5px 0;">
-                    @else
+                    
                         <br><br><br>
-                    @endif
+                    
                     
                     <p style="text-decoration: underline; font-weight: bold; margin: 0;">
                         {{ $order->business->signer_name ?? $order->business->name }}
