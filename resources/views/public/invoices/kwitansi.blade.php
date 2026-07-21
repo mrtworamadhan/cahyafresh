@@ -291,15 +291,15 @@
                 <td class="label-col" valign="top" style="padding-top: 5px;">Untuk Pembayaran</td>
                 <td class="colon-col" valign="top" style="padding-top: 5px;">:</td>
                 <td class="value-col" style="padding-top: 5px;">
-                    <strong>Pelunasan Invoice Tagihan #{{ $order->order_number }} tanggal:{{ \Carbon\Carbon::parse($order->delivery_date)->translatedFormat('d F Y') }} </strong>
+                    <strong>Pelunasan Invoice No.{{ $order->order_number }} tgl:{{ \Carbon\Carbon::parse($order->delivery_date)->translatedFormat('d F Y') }} </strong>
                     
                     <div style="font-size: 13px; margin-top: 6px; color: #333;">
-                        Rincian Barang:
+                        Rincian Pembelian:
                         <ul style="margin: 4px 0 0 16px; padding: 0;">
                             @foreach($order->orderItems as $item)
                                 <li>
                                     {{ $item->product->name ?? 'Produk Tidak Ditemukan' }} 
-                                    (Qty: {{ $item->qty_billed + $item->qty_bonus }})
+                                    (Qty: {{ $item->qty_billed }} {{ $item->productUnit?->unit_name ?? 'Pcs' }}) 
                                 </li>
                             @endforeach
                         </ul>
