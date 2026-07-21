@@ -291,7 +291,7 @@
                 <td class="label-col" valign="top" style="padding-top: 5px;">Untuk Pembayaran</td>
                 <td class="colon-col" valign="top" style="padding-top: 5px;">:</td>
                 <td class="value-col" style="padding-top: 5px;">
-                    <strong>Pelunasan Invoice Tagihan #{{ $order->order_number }}</strong>
+                    <strong>Pelunasan Invoice Tagihan #{{ $order->order_number }} tanggal:{{ \Carbon\Carbon::parse($order->delivery_date)->translatedFormat('d F Y') }} </strong>
                     
                     <div style="font-size: 13px; margin-top: 6px; color: #333;">
                         Rincian Barang:
