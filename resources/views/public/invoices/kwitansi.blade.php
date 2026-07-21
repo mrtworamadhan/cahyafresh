@@ -179,14 +179,9 @@
     <table style="width: 100%; margin-top: 10px;">
         <tr>
             <td width="55%" style="vertical-align: top; font-size: 9pt;">
-                @if(isset($accounts) && count($accounts) > 0)
-                    <strong>INFO PEMBAYARAN:</strong><br>
-                    @foreach($accounts as $acc)
-                        - {{ $acc->name }}: {{ $acc->account_number }}<br>
-                    @endforeach
-                @endif
+                
                 <div style="margin-top: 5px;">
-                    <strong>CATATAN:</strong> {{ $order->notes ?? '-' }}
+                    <strong>CATATAN:</strong> {{ $order->notes ?? 'Kwitansi Terlampir' }}
                 </div>
             </td>
 
