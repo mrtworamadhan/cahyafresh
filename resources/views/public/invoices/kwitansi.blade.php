@@ -323,8 +323,8 @@
                         <br><br><br>
                     
                     
-                    <p style="text-decoration: underline; font-weight: bold; margin: 0;">
-                        {{ $order->business->signer_name ?? $order->business->name }}
+                    <p style="text-decoration: underline; font-size: 12px; font-weight: bold; margin: 0;">
+                        {{ $order->business->signer_title ?? $order->business->name }}
                     </p>
                 </td>
             </tr>
