@@ -181,7 +181,7 @@
             <td width="55%" style="vertical-align: top; font-size: 9pt;">
                 
                 <div style="margin-top: 5px;">
-                    <strong>CATATAN:</strong> {{ $order->notes ?? 'Kwitansi Terlampir' }}
+                    <strong>CATATAN: Kwitansi Terlampir</strong> {{ $order->notes ?? 'Kwitansi Terlampir' }}
                 </div>
             </td>
 
