@@ -425,7 +425,7 @@
 
                             <div>
                                 <p class="text-xs font-bold text-zinc-700 dark:text-zinc-300 leading-tight">{{ $history['title'] }}</p>
-                                <p class="text-[10px] text-zinc-400 mt-0.5">{{ \Carbon\Carbon::parse($history['delivery_date'])->format('d M Y, H:i') }}</p>
+                                <p class="text-[10px] text-zinc-400 mt-0.5">{{ \Carbon\Carbon::parse($history['date'])->format('d M Y, H:i') }}</p>
                                 @if($history['note'])
                                     <p class="text-[10px] text-zinc-500 dark:text-zinc-400 italic mt-1 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded inline-block">{{ $history['note'] }}</p>
                                 @endif

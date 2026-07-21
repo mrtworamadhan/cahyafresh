@@ -111,6 +111,7 @@ new #[Title('Customer Portal - Cahya Fresh')] class extends Component
                 // PERBAIKAN: Paksa format tanggal menjadi string datetime standard agar apple-to-apple saat di-sort
                 'created_at' => \Carbon\Carbon::parse($order->order_date ?? $order->updated_at)->format('Y-m-d H:i:s'),
                 'type' => 'in', 
+                'date' => $order->delivery_date ?? $order->order_date,
                 'title' => 'Komisi Masuk (Nota #' . $order->order_number . ')',
                 'amount' => (float)$order->commission_amount,
                 'note' => $order->commission_note ?? 'Bonus pencatatan pesanan',
@@ -135,6 +136,7 @@ new #[Title('Customer Portal - Cahya Fresh')] class extends Component
                 // PERBAIKAN: Paksa format tanggal menjadi string datetime standard yang sama
                 'created_at' => \Carbon\Carbon::parse($ledger->transaction_date)->format('Y-m-d H:i:s'),
                 'type' => 'out', 
+                'date' => $ledger->transaction_date,
                 'title' => 'Pencairan Komisi (Withdraw)',
                 'amount' => (float)$ledger->amount,
                 'note' => $ledger->description ?? 'Penarikan dana tunai dari dompet toko',
