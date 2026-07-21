@@ -430,7 +430,7 @@
                                 
                                 <!-- PERBAIKAN: Pengecekan aman untuk 'date' -->
                                 <p class="text-[10px] text-zinc-400 mt-0.5">
-                                    {{ data_get($history, 'date') ? \Carbon\Carbon::parse(data_get($history, 'date'))->format('d M Y, H:i') : '-' }}
+                                    {{ data_get($history, 'delivery_date') ? \Carbon\Carbon::parse(data_get($history, 'delivery_date'))->format('d M Y, H:i') : '-' }}
                                 </p>
                                 
                                 <!-- PERBAIKAN: Pengecekan aman untuk 'note' -->
